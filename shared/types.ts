@@ -259,6 +259,8 @@ export type ServerMessage =
       t: 'welcome';
       playerId: number;
       room: string;
+      /** True when this client is the only human here and may set the rules. */
+      host: boolean;
       config: WorldConfig;
       tickRate: number;
       snapshotRate: number;

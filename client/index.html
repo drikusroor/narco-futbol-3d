@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#120a08" />
+    <title>Narco Futbol</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>⚽</text></svg>" />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+    <div id="grain" aria-hidden="true"></div>
+
+    <!-- Heads up display -->
+    <div id="hud" class="hidden">
+      <div id="scoreboard">
+        <div class="team home">
+          <span class="badge" id="home-badge">MED</span>
+          <span class="score" id="home-score">0</span>
+        </div>
+        <div class="clock">
+          <span id="clock">5:00</span>
+          <span id="phase-label">CALENTANDO</span>
+        </div>
+        <div class="team away">
+          <span class="score" id="away-score">0</span>
+          <span class="badge" id="away-badge">CAL</span>
+        </div>
+      </div>
+
+      <div id="toasts"></div>
+
+      <div id="bottom-left">
+        <div id="powerup" class="hidden"><span id="powerup-label"></span><i id="powerup-bar"></i></div>
+        <div id="meters">
+          <div class="meter stamina"><i id="stamina-bar"></i><label>AIRE</label></div>
+          <div class="meter charge"><i id="charge-bar"></i><label>FUERZA</label></div>
+        </div>
+        <div id="you">—</div>
+      </div>
+
+      <canvas id="radar" width="220" height="150"></canvas>
+
+      <div id="feed"></div>
+
+      <div id="chatbox">
+        <div id="chatlog"></div>
+        <input id="chatinput" maxlength="140" placeholder="Press T to talk…" />
+      </div>
+
+      <div id="netstat"><span id="ping">--</span> ms</div>
+
+      <div id="help" class="hidden">
+        <h3>Controles</h3>
+        <table>
+          <tr><td>WASD / arrows</td><td>Move</td></tr>
+          <tr><td>Shift</td><td>Sprint</td></tr>
+          <tr><td>J / Left click</td><td>Pass (hold = through ball)</td></tr>
+          <tr><td>K / Right click</td><td>Shoot (hold = harder &amp; higher)</td></tr>
+          <tr><td>L</td><td>Lofted pass / cross</td></tr>
+          <tr><td>Space</td><td>Tackle (sprinting = slide)</td></tr>
+          <tr><td>Q</td><td>Switch to the nearest team-mate</td></tr>
+          <tr><td>T</td><td>Chat</td></tr>
+          <tr><td>H</td><td>Toggle this panel</td></tr>
+          <tr><td>M</td><td>Mute</td></tr>
+        </table>
+        <p class="small">Gamepad: left stick move, A pass, B shoot, Y lob, X tackle, RB sprint, LB switch.</p>
+      </div>
+    </div>
+
+    <!-- Front end -->
+    <div id="menu">
+      <div class="plate">
+        <h1><span>NARCO</span><em>FUTBOL</em></h1>
+        <p class="tagline">Cinco contra cinco. Sin árbitro que valga. 1988.</p>
+
+        <label class="field">
+          <span>Tu nombre</span>
+          <input id="name-input" maxlength="18" placeholder="El Chino" />
+        </label>
+
+        <label class="field">
+          <span>Estadio (room)</span>
+          <input id="room-input" maxlength="24" placeholder="estadio" />
+        </label>
+
+        <div class="field row">
+          <label><span>Equipo</span>
+            <select id="team-select">
+              <option value="auto">Auto</option>
+              <option value="0">Cartel de Medallo</option>
+              <option value="1">Los Verdes de Cali</option>
+            </select>
+          </label>
+          <label><span>Duración</span>
+            <select id="length-select">
+              <option value="180">3 min</option>
+              <option value="300" selected>5 min</option>
+              <option value="480">8 min</option>
+              <option value="600">10 min</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="field row">
+          <label><span>Equipos</span>
+            <select id="size-select">
+              <option value="3">3 v 3</option>
+              <option value="4">4 v 4</option>
+              <option value="5" selected>5 v 5</option>
+              <option value="6">6 v 6</option>
+            </select>
+          </label>
+          <label><span>Bots</span>
+            <select id="difficulty-select">
+              <option value="0.35">Tranquilos</option>
+              <option value="0.68" selected>Normales</option>
+              <option value="0.9">Sicarios</option>
+            </select>
+          </label>
+        </div>
+
+        <button id="play-button">JUGAR</button>
+        <p class="note" id="menu-note">
+          Empty shirts are filled by bots, and they hand the shirt back the moment a human turns up.
+        </p>
+        <p class="small credits">Arcade football. Fictional clubs, fictional sponsors, fictional everything.</p>
+      </div>
+    </div>
+
+    <div id="loading" class="hidden"><span>CONECTANDO…</span></div>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

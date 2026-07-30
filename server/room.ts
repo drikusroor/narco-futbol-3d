@@ -166,6 +166,7 @@ export class Room {
     this.sendJson(full, {
       t: 'welcome',
       playerId: slot.id,
+      host: this.clients.size === 1,
       room: this.name,
       config: this.world.config,
       tickRate: TICK_RATE,
@@ -260,6 +261,14 @@ export class Room {
   }
 
   private applyConfig(client: Client, msg: Extract<ClientMessage, { t: 'config' }>): void {
+    // Settings changes restart the match, so only allow them when nobody else
+    // is mid-game: the first player in, or during warm-up and full time.
+    const settled =
+      this.world.match.phase === MatchPhase.Warmup || this.world.match.phase === MatchPhase.FullTime;
+    if (this.clients.size > 1 && !settled) {
+      this.sendJson(client, { t: 'notice', text: 'match in progress - settings locked' });
+      return;
+    }
     const patch = sanitizeConfig({
       matchSeconds: msg.matchSeconds,
       teamSize: msg.teamSize,
@@ -313,6 +322,7 @@ export class Room {
     this.sendJson(client, {
       t: 'welcome',
       playerId: target.id,
+      host: false,
       room: this.name,
       config: this.world.config,
       tickRate: TICK_RATE,
@@ -360,6 +370,7 @@ export class Room {
     this.sendJson(client, {
       t: 'welcome',
       playerId: best.id,
+      host: false,
       room: this.name,
       config: this.world.config,
       tickRate: TICK_RATE,
@@ -404,6 +415,7 @@ export class Room {
       this.sendJson(c, {
         t: 'welcome',
         playerId: slot.id,
+        host: false,
         room: this.name,
         config: this.world.config,
         tickRate: TICK_RATE,

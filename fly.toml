@@ -1,0 +1,45 @@
+# fly.io deployment for Narco Futbol.
+#
+#   fly launch --no-deploy      (once, to create the app)
+#   fly deploy
+#
+# Matches are held in memory on a single machine, so a room lives on whichever
+# machine the WebSocket landed on. Keep one machine per region and let Fly's
+# proxy pin the connection, or shard by room name if you ever outgrow it.
+
+app = "narco-futbol"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  HOST = "0.0.0.0"
+  MAX_ROOMS = "60"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # A match must not be evicted mid-game, so machines stay up.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 180
+    hard_limit = 240
+
+  [[http_service.checks]]
+    interval = "20s"
+    timeout = "4s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/api/health"
+
+[[vm]]
+  # A 5v5 room costs a fraction of a core; this comfortably holds a few dozen.
+  size = "shared-cpu-1x"
+  memory = "512mb"
