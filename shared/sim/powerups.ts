@@ -1,5 +1,4 @@
 import {
-  BALL_RADIUS,
   HALF_LENGTH,
   HALF_WIDTH,
   POWERUP_DURATION,
@@ -66,8 +65,6 @@ export function updatePowerups(world: World, dt: number): void {
   }
 
   world.rngState = rng.state;
-  void BALL_RADIUS;
-  void POWERUP_SPAWN_INTERVAL;
 }
 
 /** Drop a crate somewhere useful: midfield-ish, never in the six yard box. */

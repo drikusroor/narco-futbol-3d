@@ -20,8 +20,7 @@ export const PITCH_WIDTH = 52;
 export const HALF_LENGTH = PITCH_LENGTH / 2;
 export const HALF_WIDTH = PITCH_WIDTH / 2;
 
-export const GOAL_WIDTH = 11;
-export const GOAL_HALF_WIDTH = GOAL_WIDTH / 2;
+export const GOAL_HALF_WIDTH = 5.5;
 export const GOAL_HEIGHT = 3.4;
 export const GOAL_DEPTH = 3;
 export const POST_RADIUS = 0.12;
@@ -37,7 +36,6 @@ export const WALL_HEIGHT = 6;
 
 // --- Ball -------------------------------------------------------------------
 export const BALL_RADIUS = 0.34; // slightly oversized, reads better at distance
-export const BALL_MASS = 0.43;
 export const GRAVITY = 16.5; // punchier than 9.81 so lobs come down fast
 export const BALL_DRAG = 0.0125; // quadratic air drag coefficient (per m/s^2)
 export const BALL_MAGNUS = 0.0058; // curve strength: a = k * (spin x vel)
@@ -50,7 +48,6 @@ export const BALL_MAX_SPEED = 42;
 // --- Players ----------------------------------------------------------------
 export const PLAYER_RADIUS = 0.55;
 export const PLAYER_HEIGHT = 1.85;
-export const PLAYER_MASS = 78;
 
 export const RUN_SPEED = 7.4;
 export const SPRINT_SPEED = 10.6;
@@ -98,10 +95,7 @@ export const TACKLE_COOLDOWN = 0.75;
 export const SHOULDER_IMPULSE = 7.5;
 export const SLIDE_SPEED = 12.5;
 export const SLIDE_DURATION = 0.62;
-export const SLIDE_RECOVERY = 0.75;
-export const SLIDE_RANGE = 2.3;
 export const STUN_TIME = 0.55;
-export const FOUL_CHANCE_FROM_BEHIND = 0.75;
 
 // --- Power-ups --------------------------------------------------------------
 export const POWERUP_RADIUS = 1.3;
@@ -120,8 +114,6 @@ export const GOAL_CELEBRATION = 3.6;
 export const FREE_KICK_DELAY = 1.6;
 export const FREE_KICK_WALL_DISTANCE = 5;
 export const FULLTIME_LINGER = 14;
-
-export const TEAM_COUNT = 2;
 
 /** Team identity. The names are flavour; the sim only cares about 0 and 1. */
 export const TEAM_INFO = [

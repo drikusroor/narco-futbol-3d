@@ -382,7 +382,7 @@ export function tryShoulder(world: World, p: PlayerState): void {
  * Resolve sliding players against the ball and against opponents. Winning the
  * ball first is clean; taking the man is a foul.
  */
-export function resolveSlides(world: World, dt: number): void {
+export function resolveSlides(world: World): void {
   const rng = rngOf(world);
   for (const p of world.players) {
     if (p.act !== PlayerAct.Slide) continue;
@@ -433,5 +433,4 @@ export function resolveSlides(world: World, dt: number): void {
     }
   }
   saveRng(world, rng);
-  void dt;
 }

@@ -12,7 +12,6 @@ import {
   SLIDE_DURATION,
   SLIDE_SPEED,
   SPRINT_SPEED,
-  SPRINT_SPEED as _SPRINT,
   STAMINA_MAX,
   STAMINA_RECOVER,
   STAMINA_SPRINT_DRAIN,
@@ -31,13 +30,11 @@ import {
   type PlayerState,
   type World,
 } from '../types.js';
-import { kickLoose, startSlide, tryShoulder, doPass, doShot, doLob, canReachBall } from './actions.js';
+import { startSlide, tryShoulder, doPass, doShot, doLob, canReachBall } from './actions.js';
 import { speedMul } from './stats.js';
 
-void _SPRINT;
-
-/** Can this player act at all right now? */
-export function isFrozen(world: World, p: PlayerState): boolean {
+/** Can anyone act right now, or is the game waiting on a whistle? */
+export function isFrozen(world: World): boolean {
   const phase = world.match.phase;
   if (phase === MatchPhase.Play) return false;
   if (phase === MatchPhase.Kickoff || phase === MatchPhase.FreeKick) {
@@ -68,7 +65,7 @@ export function stepPlayer(world: World, p: PlayerState, input: PlayerInput, dt:
     }
   }
 
-  const frozen = isFrozen(world, p);
+  const frozen = isFrozen(world);
   if (frozen) {
     p.vel.x *= 1 - damp(10, dt);
     p.vel.z *= 1 - damp(10, dt);
@@ -82,7 +79,7 @@ export function stepPlayer(world: World, p: PlayerState, input: PlayerInput, dt:
 
   switch (p.act) {
     case PlayerAct.Slide:
-      stepSlide(world, p, dt);
+      stepSlide(p, dt);
       p.lastButtons = input.buttons;
       return;
     case PlayerAct.Stunned:
@@ -210,21 +207,17 @@ function handleActions(world: World, p: PlayerState, input: PlayerInput, dt: num
     }
   }
 
-  // A free ball at your feet with nothing pressed still gets swept clear by
-  // keepers - handled by the keeper AI, which calls kickLoose directly.
-  void kickLoose;
-  void dt;
 }
 
 function canKick(world: World, p: PlayerState): boolean {
-  return p.kickCooldown <= 0 && p.act !== PlayerAct.Slide && p.act !== PlayerAct.Stunned && !isFrozen(world, p);
+  return p.kickCooldown <= 0 && p.act !== PlayerAct.Slide && p.act !== PlayerAct.Stunned && !isFrozen(world);
 }
 
 function nearBall(world: World, p: PlayerState): boolean {
   return canReachBall(world, p);
 }
 
-function stepSlide(world: World, p: PlayerState, dt: number): void {
+function stepSlide(p: PlayerState, dt: number): void {
   p.actTimer -= dt;
   const t = clamp(p.actTimer / SLIDE_DURATION, 0, 1);
   const speed = SLIDE_SPEED * (0.35 + 0.65 * t);
@@ -238,7 +231,6 @@ function stepSlide(world: World, p: PlayerState, dt: number): void {
     p.vel.z *= 0.2;
     p.tackleCooldown = TACKLE_COOLDOWN;
   }
-  void world;
 }
 
 export function integrate(p: PlayerState, dt: number): void {
@@ -268,7 +260,7 @@ export function clampToPitch(p: PlayerState): void {
 }
 
 /** Push overlapping players apart; heavier/stronger players give less ground. */
-export function resolvePlayerCollisions(world: World, dt: number): void {
+export function resolvePlayerCollisions(world: World): void {
   const players = world.players;
   const minD = PLAYER_RADIUS * 2;
   for (let i = 0; i < players.length; i++) {
@@ -306,5 +298,4 @@ export function resolvePlayerCollisions(world: World, dt: number): void {
       clampToPitch(b);
     }
   }
-  void dt;
 }

@@ -23,8 +23,6 @@ import { interceptPoint } from '@shared/sim/predict.js';
 import { speedMul } from '@shared/sim/stats.js';
 import { keeperThink, newKeeperMemory, type KeeperMemory } from './keeper.js';
 
-type BotState = 'chase' | 'press' | 'support' | 'mark' | 'onball';
-
 /**
  * One brain per bot. Bots are deliberately not frame-perfect: they re-decide on
  * a reaction timer, aim with noise, and hold buttons the way a human would.
@@ -33,7 +31,6 @@ export class BotBrain {
   readonly playerId: number;
   private rng: Rng;
   private decisionTimer = 0;
-  private state: BotState = 'support';
   private targetX = 0;
   private targetZ = 0;
   private aim = 0;
@@ -118,18 +115,15 @@ export class BotBrain {
 
   private decide(world: World, p: PlayerState, skill: number): void {
     const ball = world.ball;
-    const dir = attackDir(p.team);
     const owner = ball.owner >= 0 ? world.players.find((x) => x.id === ball.owner) : undefined;
 
     if (world.match.phase !== MatchPhase.Play && world.match.phase !== MatchPhase.Kickoff) {
       const home = homePosition(world, p);
       this.setTarget(home.x, home.z, false);
-      this.state = 'support';
       return;
     }
 
     if (owner?.id === p.id) {
-      this.state = 'onball';
       this.onBall(world, p, skill);
       return;
     }
@@ -137,12 +131,9 @@ export class BotBrain {
     const chaser = this.designatedChaser(world, p.team);
     if (!owner) {
       if (chaser === p.id) {
-        this.state = 'chase';
-        const spd = RUN_SPEED * speedMul(p);
         const pt = interceptPoint(ball, p, SPRINT_SPEED * speedMul(p));
         this.setTarget(pt.x, pt.z, dist2(p.pos, ball.pos) > 4 || pt.t > 0.5);
         this.aim = headingOf(ball.pos.x - p.pos.x, ball.pos.z - p.pos.z);
-        void spd;
         return;
       }
       this.offBallShape(world, p, true);
@@ -150,7 +141,6 @@ export class BotBrain {
     }
 
     if (owner.team === p.team) {
-      this.state = 'support';
       this.offBallShape(world, p, false);
       return;
     }
@@ -158,13 +148,10 @@ export class BotBrain {
     // Defending.
     const presser = this.designatedChaser(world, p.team);
     if (presser === p.id) {
-      this.state = 'press';
       this.press(world, p, owner, skill);
       return;
     }
-    this.state = 'mark';
     this.mark(world, p, owner);
-    void dir;
   }
 
   /** Which of our players should go to the ball: lowest time-to-ball. */
@@ -191,7 +178,6 @@ export class BotBrain {
   private onBall(world: World, p: PlayerState, skill: number): void {
     const dir = attackDir(p.team);
     const goalX = targetGoalX(p.team);
-    const dGoalX = Math.abs(goalX - p.pos.x);
     const dGoal = Math.hypot(goalX - p.pos.x, clamp(p.pos.z, -GOAL_HALF_WIDTH, GOAL_HALF_WIDTH) - p.pos.z);
     const pressure = this.nearestOpponentDist(world, p);
 
@@ -209,7 +195,6 @@ export class BotBrain {
       this.setTarget(p.pos.x + dir * 1.2, p.pos.z, false);
       return;
     }
-    void dGoalX;
 
     // Pass?
     // In the final third bots back themselves and drive at the goal instead of

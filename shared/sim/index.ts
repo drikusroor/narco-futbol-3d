@@ -39,8 +39,8 @@ export function stepWorld(world: World, inputs: Map<number, PlayerInput>, dt: nu
     stepPlayer(world, p, inputs.get(p.id) ?? NO_INPUT, dt);
   }
 
-  resolveSlides(world, dt);
-  resolvePlayerCollisions(world, dt);
+  resolveSlides(world);
+  resolvePlayerCollisions(world);
   applyDribble(world, dt);
 
   const { prev } = stepBall(world, dt);

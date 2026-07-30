@@ -18,6 +18,8 @@ FROM node:22-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 
+# The runtime only needs `ws`: three.js and the Discord SDK are bundled into
+# the client at build time, which is why they are dev/optional dependencies.
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev --omit=optional --no-audit --no-fund && npm cache clean --force
 

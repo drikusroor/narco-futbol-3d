@@ -6,7 +6,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 
 import { decodeInputBatch } from '@shared/protocol.js';
 import type { ClientMessage } from '@shared/types.js';
-import { Room, type Client } from './room.js';
+import { Room } from './room.js';
 
 const PORT = Number(process.env.PORT ?? 8080);
 const HOST = process.env.HOST ?? '0.0.0.0';
