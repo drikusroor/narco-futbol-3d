@@ -16,9 +16,13 @@
     "build:server": "node scripts/build-server.mjs",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test test/*.test.ts"
+    "test": "tsx --test test/*.test.ts",
+    "sprites:bake": "node scripts/bake-sprites.mjs",
+    "sprites:compare": "node scripts/compare-sprites.mjs"
   },
   "dependencies": {
+    "@dicebear/core": "^9.4.3",
+    "@dicebear/personas": "^9.4.2",
     "ws": "^8.21.1"
   },
   "devDependencies": {

@@ -43,25 +43,29 @@ export const TAP_ACTIONS: Action[] = ['chat', 'help', 'settings', 'mute', 'switc
 
 export type Bindings = Record<Action, string[]>;
 
+/** Key, alternative, gamepad button. The settings table is these three columns. */
+export const SLOTS = 3;
+
 /**
  * Keys are stored lowercased exactly as `KeyboardEvent.key` reports them, plus
- * `mouse0` / `mouse2` for the two mouse buttons the game uses.
+ * `mouse0` / `mouse2` for the two mouse buttons the game uses and `pad0`…`pad16`
+ * for gamepad buttons in the browser's standard mapping.
  */
 export const DEFAULT_BINDINGS: Bindings = {
-  up: ['w', 'arrowup'],
-  down: ['s', 'arrowdown'],
-  left: ['a', 'arrowleft'],
-  right: ['d', 'arrowright'],
-  sprint: ['shift', ''],
-  pass: ['j', 'mouse0'],
-  shoot: ['k', 'mouse2'],
-  lob: ['l', ''],
-  tackle: [' ', ''],
-  switch: ['q', ''],
-  chat: ['t', ''],
-  help: ['h', ''],
-  settings: ['escape', ''],
-  mute: ['m', ''],
+  up: ['w', 'arrowup', 'pad12'],
+  down: ['s', 'arrowdown', 'pad13'],
+  left: ['a', 'arrowleft', 'pad14'],
+  right: ['d', 'arrowright', 'pad15'],
+  sprint: ['shift', '', 'pad5'],
+  pass: ['j', 'mouse0', 'pad0'],
+  shoot: ['k', 'mouse2', 'pad1'],
+  lob: ['l', '', 'pad3'],
+  tackle: [' ', '', 'pad2'],
+  switch: ['q', '', 'pad4'],
+  chat: ['t', '', ''],
+  help: ['h', '', 'pad8'],
+  settings: ['escape', '', 'pad9'],
+  mute: ['m', '', ''],
 };
 
 const STORAGE_KEY = 'nf.binds';
@@ -81,7 +85,9 @@ export function loadBindings(): Bindings {
     for (const a of ACTIONS) {
       const v = saved[a];
       if (!Array.isArray(v)) continue;
-      binds[a] = [String(v[0] ?? ''), String(v[1] ?? '')];
+      // Bindings saved before the pad column existed are two long; keep the
+      // keys the player chose and let the pad default fill the gap.
+      binds[a] = binds[a].map((fallback, i) => (i < v.length ? String(v[i] ?? '') : fallback));
     }
   } catch {
     // A corrupt blob in storage is not worth refusing to start over.
@@ -97,9 +103,39 @@ export function saveBindings(binds: Bindings): void {
   }
 }
 
+/**
+ * Standard-mapping button names. Xbox lettering, because it is what most pads
+ * are printed with and what the browser's mapping is modelled on; a PlayStation
+ * pad reports the same indices, so A is ✕, B is ◯, X is ▢ and Y is △.
+ */
+const PAD_LABELS: string[] = [
+  'A',
+  'B',
+  'X',
+  'Y',
+  'LB',
+  'RB',
+  'LT',
+  'RT',
+  'Back',
+  'Start',
+  'L3',
+  'R3',
+  'Pad ↑',
+  'Pad ↓',
+  'Pad ←',
+  'Pad →',
+  'Guide',
+];
+
+export function isPadKey(key: string): boolean {
+  return key.startsWith('pad');
+}
+
 /** Human-readable name for a bound key, for the settings table. */
 export function keyLabel(key: string): string {
   if (!key) return '—';
+  if (isPadKey(key)) return PAD_LABELS[Number(key.slice(3))] ?? key.toUpperCase();
   const named: Record<string, string> = {
     ' ': 'Space',
     arrowup: '↑',

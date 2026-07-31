@@ -1,0 +1,85 @@
+{
+  "manifest": {
+    "tile": 64,
+    "azimuths": 16,
+    "columns": 9,
+    "elevations": [
+      0.3490658503988659,
+      0.5934119456780721,
+      0.8726646259971648
+    ],
+    "clips": {
+      "idle": {
+        "row": 0,
+        "frames": 1
+      },
+      "run": {
+        "row": 1,
+        "frames": 8
+      },
+      "kick": {
+        "row": 9,
+        "frames": 4
+      },
+      "tackle": {
+        "row": 13,
+        "frames": 1
+      },
+      "slide": {
+        "row": 14,
+        "frames": 1
+      },
+      "dive": {
+        "row": 15,
+        "frames": 1
+      },
+      "stunned": {
+        "row": 16,
+        "frames": 1
+      },
+      "celebrate": {
+        "row": 17,
+        "frames": 2
+      }
+    },
+    "totalFrames": 19,
+    "width": 576,
+    "height": 3648,
+    "worldSize": 2.6,
+    "centreY": 1.15
+  },
+  "clips": [
+    {
+      "name": "idle",
+      "frames": 1
+    },
+    {
+      "name": "run",
+      "frames": 8
+    },
+    {
+      "name": "kick",
+      "frames": 4
+    },
+    {
+      "name": "tackle",
+      "frames": 1
+    },
+    {
+      "name": "slide",
+      "frames": 1
+    },
+    {
+      "name": "dive",
+      "frames": 1
+    },
+    {
+      "name": "stunned",
+      "frames": 1
+    },
+    {
+      "name": "celebrate",
+      "frames": 2
+    }
+  ]
+}

@@ -37,7 +37,7 @@
           <div class="meter stamina"><i id="stamina-bar"></i><label data-i18n="hud.stamina">AIR</label></div>
           <div class="meter charge"><i id="charge-bar"></i><label data-i18n="hud.charge">POWER</label></div>
         </div>
-        <div id="you">—</div>
+        <div id="you"><img id="you-avatar" class="avatar tiny" alt="" /><span id="you-text">—</span></div>
       </div>
 
       <canvas id="radar" width="220" height="150"></canvas>
@@ -69,7 +69,7 @@
       <div id="help" class="hidden">
         <h3 data-i18n="settings.controls">Controls</h3>
         <div id="help-list"></div>
-        <p class="small" data-i18n="settings.gamepad"></p>
+        <p class="small" data-i18n="hud.help.hint"></p>
       </div>
     </div>
 
@@ -81,7 +81,10 @@
 
         <label class="field">
           <span data-i18n="menu.name">Your name</span>
-          <input id="name-input" maxlength="18" data-i18n-ph="menu.name.ph" />
+          <div class="name-row">
+            <input id="name-input" maxlength="18" data-i18n-ph="menu.name.ph" />
+            <img id="name-avatar" class="avatar" alt="" />
+          </div>
         </label>
 
         <label class="field">
@@ -152,6 +155,10 @@
         <h3 data-i18n="settings.language">Language</h3>
         <div id="lang-row" class="chip-row"></div>
 
+        <h3 data-i18n="settings.art">Player art</h3>
+        <div id="art-row" class="chip-row"></div>
+        <p class="small" data-i18n="settings.art.blurb"></p>
+
         <h3 data-i18n="settings.audio">Sound</h3>
         <label class="slider-row">
           <span data-i18n="settings.volume">Volume</span>
@@ -162,7 +169,7 @@
         <h3 data-i18n="settings.controls">Controls</h3>
         <p class="small" data-i18n="settings.rebind"></p>
         <div id="bind-table"></div>
-        <p class="small" data-i18n="settings.gamepad"></p>
+        <p class="small" id="pad-status"></p>
 
         <div class="button-row">
           <button id="settings-reset" class="ghost" data-i18n="settings.reset">RESTORE DEFAULTS</button>

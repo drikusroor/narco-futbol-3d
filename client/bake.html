@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Narco Futbol — sprite bake</title>
+    <style>
+      body {
+        margin: 0;
+        background: #141414;
+        color: #ddd;
+        font: 13px monospace;
+      }
+      img {
+        image-rendering: pixelated;
+        border: 1px solid #444;
+        margin: 8px;
+        max-height: 70vh;
+      }
+    </style>
+  </head>
+  <body>
+    <p id="status">baking…</p>
+    <div id="sheets"></div>
+    <script type="module" src="./src/bake.ts"></script>
+  </body>
+</html>

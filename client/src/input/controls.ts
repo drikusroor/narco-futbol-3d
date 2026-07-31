@@ -7,6 +7,16 @@ import {
   type Action,
   type Bindings,
 } from './bindings.js';
+import { Pad } from './gamepad.js';
+
+/** Is this keystroke going into something the player is typing in? */
+function isField(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement
+  );
+}
 
 /**
  * Keyboard, mouse and gamepad, folded into the one input struct the simulation
@@ -29,6 +39,9 @@ export class Controls {
   /** Set while a modal (settings, tutorial pause) owns the keyboard. */
   blocked = false;
 
+  /** The gamepad, if there is one. Polled here, read by the menu navigator. */
+  readonly pad: Pad;
+
   private onAction: (action: Action) => void;
   private onRawKey: (key: string) => void;
 
@@ -36,9 +49,11 @@ export class Controls {
     target: HTMLElement,
     onAction: (action: Action) => void = () => {},
     onRawKey: (key: string) => void = () => {},
+    onPadChange: () => void = () => {},
   ) {
     this.onAction = onAction;
     this.onRawKey = onRawKey;
+    this.pad = new Pad(onPadChange);
 
     window.addEventListener('keydown', (e) => {
       const k = e.key.toLowerCase();
@@ -53,7 +68,13 @@ export class Controls {
         if (k === 'escape' || k === 'enter') this.onRawKey(k);
         return;
       }
-      if (shouldSwallow(k)) e.preventDefault();
+      // Somebody is filling in a form - their name, the room, a dropdown. The
+      // letters are theirs, not the game's; only Esc still means Esc.
+      if (k !== 'escape' && isField(e.target)) return;
+      // A key that does something in the game does nothing else: without this,
+      // the T that opens the chat box also arrives as the first letter typed
+      // into it, because focus moves while the keystroke is still in flight.
+      if (shouldSwallow(k) || this.bound(k)) e.preventDefault();
       if (!this.down.has(k)) this.press(k);
       this.down.add(k);
     });
@@ -78,6 +99,14 @@ export class Controls {
     target.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
+  /** Is anything at all listening for this key? */
+  private bound(key: string): boolean {
+    for (const keys of Object.values(this.binds)) {
+      if (keys.includes(key)) return true;
+    }
+    return false;
+  }
+
   /** Announce whichever actions this key triggers, plus the raw key. */
   private press(key: string): void {
     this.onRawKey(key);
@@ -95,9 +124,14 @@ export class Controls {
     saveBindings(binds);
   }
 
-  /** Swallow the next key or mouse press and hand it to `cb`. Esc clears. */
+  /** Swallow the next key, click or pad button and hand it to `cb`. Esc clears. */
   captureNext(cb: (key: string) => void): void {
     this.capture = cb;
+  }
+
+  /** True while a rebind is waiting, so the menu ignores the same button. */
+  get capturing(): boolean {
+    return this.capture !== null;
   }
 
   cancelCapture(): void {
@@ -107,9 +141,27 @@ export class Controls {
   /** Is any key bound to this action currently held? */
   isDown(action: Action): boolean {
     for (const k of this.binds[action]) {
-      if (k && this.down.has(k)) return true;
+      if (k && (this.down.has(k) || this.pad.down.has(k))) return true;
     }
     return false;
+  }
+
+  /**
+   * Read the gamepad. Called once per rendered frame, not once per simulation
+   * tick, so a button is announced exactly once however many ticks the frame
+   * has to catch up on.
+   */
+  poll(): void {
+    this.pad.poll();
+    for (const key of this.pad.pressed) {
+      if (this.capture) {
+        const cb = this.capture;
+        this.capture = null;
+        cb(key);
+        return;
+      }
+      if (!this.typing) this.press(key);
+    }
   }
 
   /** Read every device and produce one tick of input. */
@@ -135,22 +187,12 @@ export class Controls {
     if (this.isDown('tackle')) buttons |= BTN.TACKLE;
     if (this.isDown('switch')) buttons |= BTN.SWITCH;
 
-    // Gamepad, if one is plugged in, wins on the axes when it is being pushed.
-    const pad = navigator.getGamepads?.().find((p) => p && p.connected) ?? null;
-    if (pad) {
-      const ax = pad.axes[0] ?? 0;
-      const az = pad.axes[1] ?? 0;
-      if (Math.abs(ax) > 0.18 || Math.abs(az) > 0.18) {
-        x = ax;
-        z = az;
-      }
-      const b = pad.buttons;
-      if (b[0]?.pressed) buttons |= BTN.PASS;
-      if (b[1]?.pressed) buttons |= BTN.SHOOT;
-      if (b[3]?.pressed) buttons |= BTN.LOB;
-      if (b[2]?.pressed) buttons |= BTN.TACKLE;
-      if (b[5]?.pressed || (b[7]?.value ?? 0) > 0.4) buttons |= BTN.SPRINT;
-      if (b[4]?.pressed) buttons |= BTN.SWITCH;
+    // The left stick wins whenever it is actually being pushed, so a pad player
+    // gets analog speed while the keys stay all-or-nothing.
+    const pad = this.pad;
+    if (pad.lx !== 0 || pad.ly !== 0) {
+      x = pad.lx;
+      z = pad.ly;
     }
 
     // Flip to match the camera so the away side is not playing in a mirror.
@@ -166,6 +208,10 @@ export class Controls {
     input.moveZ = z;
     input.buttons = buttons;
     if (mag > 0.12) this.lastHeading = headingOf(x, z);
+    // The right stick aims independently: hold a run one way, pass the other.
+    if (len2(pad.rx, pad.ry) > 0.5) {
+      this.lastHeading = headingOf(pad.rx * this.flip, pad.ry * this.flip);
+    }
     input.aim = this.lastHeading;
     return input;
   }

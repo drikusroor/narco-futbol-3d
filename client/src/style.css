@@ -204,9 +204,37 @@ canvas#stage {
 }
 
 #you {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   letter-spacing: 2px;
   color: var(--dim);
+}
+
+/* --- Name-seeded faces ------------------------------------------------------ */
+.avatar {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid var(--edge);
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.avatar.tiny {
+  width: 20px;
+  height: 20px;
+}
+
+.avatar:not([src]) {
+  opacity: 0;
+}
+
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 #meters {
@@ -323,6 +351,9 @@ canvas#stage {
 }
 
 #chatlog div {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   background: rgba(20, 10, 8, 0.55);
   padding: 2px 6px;
   border-radius: 2px;
@@ -671,7 +702,7 @@ button.ghost.wide {
 
 .bind-row {
   display: grid;
-  grid-template-columns: 1fr 108px 108px;
+  grid-template-columns: 1fr 96px 96px 76px;
   gap: 6px;
   align-items: center;
   padding: 2px 0;
@@ -680,6 +711,22 @@ button.ghost.wide {
 
 .bind-row span {
   color: var(--ink);
+}
+
+.bind-row.head {
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding-bottom: 4px;
+}
+
+.bind-row.head span {
+  color: var(--dim);
+  text-align: center;
+}
+
+.bind-row.head span:first-child {
+  text-align: left;
 }
 
 .bind-key {
@@ -692,6 +739,20 @@ button.ghost.wide {
   border-radius: 3px;
   cursor: pointer;
   text-align: center;
+}
+
+#pad-status {
+  margin-top: 8px;
+}
+
+#pad-status.on {
+  color: var(--gold);
+}
+
+/* Focus only draws itself when a pad is steering; a mouse never sees it. */
+body.pad-active :focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
 }
 
 .bind-key:hover {
@@ -712,7 +773,7 @@ button.ghost.wide {
 
 /* Controls list reused by the in-game help panel */
 #help-list .bind-row {
-  grid-template-columns: 1fr 100px 100px;
+  grid-template-columns: 1fr 88px 88px 68px;
 }
 
 #help-list .bind-key {

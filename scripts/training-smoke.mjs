@@ -31,15 +31,17 @@ await page.waitForTimeout(200);
 await page.screenshot({ path: dir + '/11-settings-es.png' });
 out.menuPlay = await page.textContent('#play-button');
 
-// Rebind sprint (5th row) to Ctrl, check it stuck, then restore the defaults.
-await page.click('#bind-table .bind-row:nth-child(5) .bind-key:nth-child(2)');
+// Rebind sprint to Ctrl, check it stuck, then restore the defaults. The table
+// leads with a header row, so sprint - the fifth action - is the sixth child.
+const sprintKey = '#bind-table .bind-row:nth-child(6) .bind-key:nth-child(2)';
+await page.click(sprintKey);
 await page.waitForTimeout(150);
 await page.keyboard.press('Control');
 await page.waitForTimeout(200);
-out.rebound = await page.textContent('#bind-table .bind-row:nth-child(5) .bind-key:nth-child(2)');
+out.rebound = await page.textContent(sprintKey);
 out.storedBinds = JSON.parse(await page.evaluate(() => localStorage.getItem('nf.binds'))).sprint;
 await page.click('#settings-reset');
-out.afterReset = await page.textContent('#bind-table .bind-row:nth-child(5) .bind-key:nth-child(2)');
+out.afterReset = await page.textContent(sprintKey);
 await page.click('#settings-close');
 await page.waitForTimeout(200);
 

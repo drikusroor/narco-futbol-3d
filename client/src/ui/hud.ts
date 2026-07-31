@@ -2,6 +2,7 @@ import { GOAL_HALF_WIDTH, HALF_LENGTH, HALF_WIDTH, TEAM_INFO } from '@shared/con
 import { MatchPhase, POWERUP_INFO, PowerupType, type Role } from '@shared/types.js';
 import { applyStatic, onLangChange, t, type Key } from '../i18n.js';
 import type { RenderState } from '../net/state.js';
+import { avatarElement, setAvatar } from './avatar.js';
 
 const PHASE_KEY: Record<number, Key> = {
   [MatchPhase.Warmup]: 'phase.warmup',
@@ -46,7 +47,8 @@ export class Hud {
   private powerup = el('powerup');
   private powerupLabel = el('powerup-label');
   private powerupBar = el('powerup-bar');
-  private youLabel = el('you');
+  private youLabel = el('you-text');
+  private youAvatar = el<HTMLImageElement>('you-avatar');
   private pingLabel = el('ping');
   private radar = el<HTMLCanvasElement>('radar');
   private radarCtx = this.radar.getContext('2d')!;
@@ -91,6 +93,7 @@ export class Hud {
     if (!name) return;
     this.youLabel.textContent = `${name} · ${TEAM_INFO[team]?.short ?? '??'} · ${roleName(role)}`;
     this.youLabel.style.color = `#${(TEAM_INFO[team]?.primary ?? 0xffffff).toString(16).padStart(6, '0')}`;
+    setAvatar(this.youAvatar, name, 64);
   }
 
   update(state: RenderState, myId: number): void {
@@ -157,6 +160,7 @@ export class Hud {
   chat(from: string, text: string, team: number): void {
     const line = document.createElement('div');
     line.className = `t${team}`;
+    line.appendChild(avatarElement(from, 'avatar tiny'));
     const b = document.createElement('b');
     b.textContent = `${from}: `;
     line.appendChild(b);

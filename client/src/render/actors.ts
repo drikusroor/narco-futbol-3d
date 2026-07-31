@@ -5,10 +5,17 @@ import { ballTexture, blobTexture } from './textures.js';
 
 /**
  * Players are built from primitives on purpose: legible from the broadcast
- * camera, cheap to draw, and easy to swap for pre-rendered sprites later.
+ * camera, cheap to draw, and cheap to pre-render into sprite sheets.
+ *
+ * The rig is two layers. `group` is where the player stands and which way they
+ * face; `body` is everything made of flesh, and takes all the tilting, diving
+ * and sliding. Keeping them apart means the shadow and the selection ring never
+ * have to be un-tilted afterwards, and it means the sprite baker can point a
+ * camera at `body` on its own.
  */
 export interface PlayerRig {
   group: THREE.Group;
+  body: THREE.Group;
   torso: THREE.Mesh;
   head: THREE.Mesh;
   legL: THREE.Mesh;
@@ -22,6 +29,37 @@ export interface PlayerRig {
   stride: number;
   team: number;
   role: number;
+  build: Build;
+}
+
+/**
+ * A body shape, as a scale on the width and the height of the whole figure.
+ *
+ * Deliberately only a scale: a non-uniform scale of a Y-rotated model projects
+ * to exactly the same non-uniform scale on screen at every angle, so one baked
+ * sprite sheet covers every build simply by stretching the quad it is drawn on.
+ * A variant that changed the geometry - a bigger head, a different haircut -
+ * would need a sheet of its own.
+ */
+export interface Build {
+  xz: number;
+  y: number;
+}
+
+export const BUILDS: Record<string, Build> = {
+  regular: { xz: 1, y: 1 },
+  tall: { xz: 0.94, y: 1.1 },
+  short: { xz: 1.05, y: 0.9 },
+  chunky: { xz: 1.2, y: 0.97 },
+  skinny: { xz: 0.85, y: 1.04 },
+};
+
+const BUILD_LIST = Object.values(BUILDS);
+
+/** The same shirt always gets the same body, on every screen in the room. */
+export function buildFor(id: number): Build {
+  const h = Math.imul(id ^ 0x9e3779b9, 0x85ebca6b) >>> 0;
+  return BUILD_LIST[h % BUILD_LIST.length];
 }
 
 const shadowMat = () =>
@@ -32,12 +70,21 @@ const shadowMat = () =>
     opacity: 0.85,
   });
 
-export function makePlayerRig(team: number, role: number, keeperColour = 0xf2c744): PlayerRig {
+export function makePlayerRig(
+  team: number,
+  role: number,
+  opts: { keeperColour?: number; build?: Build } = {},
+): PlayerRig {
   const info = TEAM_INFO[team] ?? TEAM_INFO[0];
+  const keeperColour = opts.keeperColour ?? 0xf2c744;
+  const build = opts.build ?? BUILDS.regular;
   const shirt = role === Role.Keeper ? keeperColour : info.primary;
   const shorts = role === Role.Keeper ? 0x22201c : info.secondary;
 
   const group = new THREE.Group();
+  const body = new THREE.Group();
+  body.scale.set(build.xz, build.y, build.xz);
+  group.add(body);
 
   const skinMat = new THREE.MeshLambertMaterial({ color: 0xc98d5f });
   const shirtMat = new THREE.MeshLambertMaterial({ color: shirt });
@@ -46,12 +93,12 @@ export function makePlayerRig(team: number, role: number, keeperColour = 0xf2c74
   const torso = new THREE.Mesh(new THREE.CapsuleGeometry(PLAYER_RADIUS * 0.62, 0.62, 4, 10), shirtMat);
   torso.position.y = 1.15;
   torso.castShadow = true;
-  group.add(torso);
+  body.add(torso);
 
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 10), skinMat);
   head.position.y = PLAYER_HEIGHT - 0.16;
   head.castShadow = true;
-  group.add(head);
+  body.add(head);
 
   // A shock of dark hair so heads are not featureless balls.
   const hair = new THREE.Mesh(
@@ -59,25 +106,25 @@ export function makePlayerRig(team: number, role: number, keeperColour = 0xf2c74
     new THREE.MeshLambertMaterial({ color: 0x241a14 }),
   );
   hair.position.y = PLAYER_HEIGHT - 0.11;
-  group.add(hair);
+  body.add(hair);
 
   const legGeo = new THREE.CapsuleGeometry(0.14, 0.5, 3, 8);
   const legL = new THREE.Mesh(legGeo, shortsMat);
   legL.position.set(-0.17, 0.5, 0);
   legL.castShadow = true;
-  group.add(legL);
+  body.add(legL);
   const legR = new THREE.Mesh(legGeo, shortsMat);
   legR.position.set(0.17, 0.5, 0);
   legR.castShadow = true;
-  group.add(legR);
+  body.add(legR);
 
   const armGeo = new THREE.CapsuleGeometry(0.1, 0.44, 3, 8);
   const armL = new THREE.Mesh(armGeo, skinMat);
   armL.position.set(-0.46, 1.2, 0);
-  group.add(armL);
+  body.add(armL);
   const armR = new THREE.Mesh(armGeo, skinMat);
   armR.position.set(0.46, 1.2, 0);
-  group.add(armR);
+  body.add(armR);
 
   // Selection ring under whoever you are controlling.
   const ring = new THREE.Mesh(
@@ -109,7 +156,34 @@ export function makePlayerRig(team: number, role: number, keeperColour = 0xf2c74
   aura.visible = false;
   group.add(aura);
 
-  return { group, torso, head, legL, legR, armL, armR, ring, shadow, aura, stride: 0, team, role };
+  return {
+    group,
+    body,
+    torso,
+    head,
+    legL,
+    legR,
+    armL,
+    armR,
+    ring,
+    shadow,
+    aura,
+    stride: 0,
+    team,
+    role,
+    build,
+  };
+}
+
+/** Everything a pose needs, with no clock of its own so it can be baked. */
+export interface Pose {
+  speed: number;
+  act: PlayerAct;
+  actTimer: number;
+  /** Stride phase in radians; the leg swing is a sine of this. */
+  phase: number;
+  /** Seconds, only used by the celebration bounce. */
+  time: number;
 }
 
 /** Pose a player from its simulation state. */
@@ -131,8 +205,31 @@ export function poseRig(
   g.rotation.y = facing;
 
   rig.stride += speed * dt * 1.9;
-  const swing = Math.sin(rig.stride) * Math.min(0.85, 0.18 + speed * 0.07);
-  const lift = Math.max(0, Math.sin(rig.stride)) * Math.min(0.16, speed * 0.014);
+  applyPose(rig, { speed, act, actTimer, phase: rig.stride, time: performance.now() / 1000 });
+
+  rig.ring.visible = controlled;
+
+  if (powerup) {
+    const info = POWERUP_INFO[powerup];
+    rig.aura.visible = true;
+    (rig.aura.material as THREE.MeshBasicMaterial).color.setHex(info?.color ?? 0xffffff);
+    const pulse = 0.14 + Math.sin(performance.now() / 140) * 0.06;
+    (rig.aura.material as THREE.MeshBasicMaterial).opacity = pulse;
+  } else {
+    rig.aura.visible = false;
+  }
+}
+
+/**
+ * The pose itself, on the body alone. Split out from `poseRig` so the sprite
+ * baker can ask for frame 3 of the run cycle without inventing a clock - which
+ * is what keeps a baked sheet showing exactly the poses the 3D rig shows.
+ */
+export function applyPose(rig: PlayerRig, p: Pose): void {
+  const { speed, act, actTimer } = p;
+  const g = rig.body;
+  const swing = Math.sin(p.phase) * Math.min(0.85, 0.18 + speed * 0.07);
+  const lift = Math.max(0, Math.sin(p.phase)) * Math.min(0.16, speed * 0.014);
 
   // Default upright stance.
   g.position.y = 0;
@@ -188,8 +285,7 @@ export function poseRig(
       break;
     }
     case PlayerAct.Celebrate: {
-      const t = performance.now() / 200;
-      g.position.y = Math.abs(Math.sin(t)) * 0.42;
+      g.position.y = Math.abs(Math.sin(p.time * 5)) * 0.42;
       rig.armL.rotation.x = -2.5;
       rig.armR.rotation.x = -2.5;
       rig.armL.rotation.z = 0.5;
@@ -200,20 +296,7 @@ export function poseRig(
       break;
   }
 
-  rig.shadow.position.set(0, 0.02 - g.position.y, 0);
   rig.shadow.scale.setScalar(1 - Math.min(0.4, g.position.y * 0.35));
-  rig.ring.visible = controlled;
-  rig.ring.position.y = 0.03 - g.position.y;
-
-  if (powerup) {
-    const info = POWERUP_INFO[powerup];
-    rig.aura.visible = true;
-    (rig.aura.material as THREE.MeshBasicMaterial).color.setHex(info?.color ?? 0xffffff);
-    const pulse = 0.14 + Math.sin(performance.now() / 140) * 0.06;
-    (rig.aura.material as THREE.MeshBasicMaterial).opacity = pulse;
-  } else {
-    rig.aura.visible = false;
-  }
 }
 
 /** The ball, its shadow, and a trail that shows up when it is really moving. */
@@ -234,7 +317,7 @@ export function makeBall(): { group: THREE.Group; mesh: THREE.Mesh; shadow: THRE
 
 /** The man in black, complete with whistle flash. */
 export function makeReferee(): { group: THREE.Group; rig: PlayerRig } {
-  const rig = makePlayerRig(0, Role.Midfielder, 0x14120f);
+  const rig = makePlayerRig(0, Role.Midfielder, { keeperColour: 0x14120f });
   (rig.torso.material as THREE.MeshLambertMaterial).color.setHex(0x18181a);
   (rig.legL.material as THREE.MeshLambertMaterial).color.setHex(0x18181a);
   rig.ring.visible = false;

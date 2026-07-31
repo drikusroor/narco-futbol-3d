@@ -19,12 +19,25 @@ import { keyLabel } from './input/bindings.js';
 import { Controls } from './input/controls.js';
 import { GameSocket } from './net/socket.js';
 import { MatchState, type RenderPlayer } from './net/state.js';
-import { makeBall, makePlayerRig, makePowerup, makeReferee, poseRig, tintPowerup, type PlayerRig } from './render/actors.js';
+import {
+  buildFor,
+  makeBall,
+  makePlayerRig,
+  makePowerup,
+  makeReferee,
+  poseRig,
+  tintPowerup,
+  type PlayerRig,
+} from './render/actors.js';
 import { BallTrail, Effects } from './render/effects.js';
 import { DrillMarkers } from './render/markers.js';
 import { BroadcastCamera, createStage } from './render/scene.js';
+import { SpriteActors } from './render/spriteActors.js';
+import { frameFor } from './render/sprites.js';
 import { buildStadium, decayCrowdHype, setCrowdHype } from './render/stadium.js';
+import { avatarBitmap, setAvatar } from './ui/avatar.js';
 import { Hud } from './ui/hud.js';
+import { PadNav } from './ui/padnav.js';
 import { Settings } from './ui/settings.js';
 import { DrillPanel, DrillPicker } from './ui/training.js';
 import { Tutorial } from './ui/tutorial.js';
@@ -44,6 +57,7 @@ stage.scene.add(ball.group);
 const referee = makeReferee();
 stage.scene.add(referee.group);
 const markers = new DrillMarkers(stage.scene);
+const sprites = new SpriteActors(stage.scene, stage.renderer);
 
 const rigs = new Map<number, PlayerRig>();
 const pickupMeshes = new Map<number, THREE.Group>();
@@ -67,7 +81,9 @@ const controls = new Controls(
   canvas,
   (action) => onAction(action),
   (key) => onRawKey(key),
+  () => settings.renderPad(),
 );
+const padNav = new PadNav(controls);
 const settings = new Settings(
   controls,
   sfx,
@@ -136,6 +152,12 @@ const difficultySelect = document.getElementById('difficulty-select') as HTMLSel
 
 nameInput.value = localStorage.getItem('nf.name') ?? '';
 roomInput.value = new URLSearchParams(location.search).get('room') ?? '';
+
+// Your face is your name: type a different one and a different man appears.
+const nameAvatar = document.getElementById('name-avatar') as HTMLImageElement;
+const previewAvatar = (): void => setAvatar(nameAvatar, nameInput.value.trim() || 'Anon');
+nameInput.addEventListener('input', previewAvatar);
+previewAvatar();
 
 let discordRoom: string | null = null;
 void initDiscord().then((ctx) => {
@@ -333,10 +355,12 @@ function handleEvents(snap: Snapshot): void {
         } else {
           sfx.tackle();
         }
+        if (e.player === state.myPlayerId) controls.pad.rumble(e.won ? 0.5 : 0.25, 120);
         break;
       case 'foul': {
         const name = lobbyNames.get(e.player) ?? t('event.someone');
         hud.note(t('event.foul', { name }));
+        if (e.victim === state.myPlayerId) controls.pad.rumble(0.8, 260);
         break;
       }
       case 'goal': {
@@ -346,6 +370,8 @@ function handleEvents(snap: Snapshot): void {
         setCrowdHype(1);
         const info = TEAM_INFO[e.team] ?? TEAM_INFO[0];
         effects.confetti(snap.ball.x, snap.ball.z, info.primary, info.accent);
+        const me = snap.players.find((p) => p.id === state.myPlayerId);
+        controls.pad.rumble(me && me.team === e.team ? 0.9 : 0.3, 500);
         break;
       }
       case 'save':
@@ -400,22 +426,33 @@ function handleEvents(snap: Snapshot): void {
 function makeNameTag(text: string, colour: number): THREE.Sprite {
   const c = document.createElement('canvas');
   c.width = 256;
-  c.height = 64;
+  c.height = 72;
   const ctx = c.getContext('2d')!;
-  ctx.font = 'bold 34px "Trebuchet MS", sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.lineWidth = 6;
-  ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-  ctx.strokeText(text, 128, 34, 240);
-  ctx.fillStyle = `#${colour.toString(16).padStart(6, '0')}`;
-  ctx.fillText(text, 128, 34, 240);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
+
+  const draw = (face: HTMLImageElement | null): void => {
+    ctx.clearRect(0, 0, c.width, c.height);
+    if (face) ctx.drawImage(face, 6, 6, 60, 60);
+    ctx.font = 'bold 34px "Trebuchet MS", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.strokeText(text, 74, 38, 176);
+    ctx.fillStyle = `#${colour.toString(16).padStart(6, '0')}`;
+    ctx.fillText(text, 74, 38, 176);
+    tex.needsUpdate = true;
+  };
+
+  draw(null);
+  // The face turns up a frame or two later; the tag is already on the pitch.
+  void avatarBitmap(text, 64).then(draw);
+
   const sprite = new THREE.Sprite(
     new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }),
   );
-  sprite.scale.set(4.2, 1.05, 1);
+  sprite.scale.set(4.4, 1.24, 1);
   return sprite;
 }
 
@@ -440,17 +477,37 @@ function rigFor(p: RenderPlayer): PlayerRig {
   let rig = rigs.get(p.id);
   if (!rig || rig.team !== p.team || rig.role !== p.role) {
     if (rig) rig.group.removeFromParent();
-    rig = makePlayerRig(p.team, p.role);
+    rig = makePlayerRig(p.team, p.role, { build: buildFor(p.id) });
     stage.scene.add(rig.group);
     rigs.set(p.id, rig);
   }
   return rig;
 }
 
+/**
+ * Beyond this the pre-rendered sprite is indistinguishable from the model, so
+ * "auto" hands over there and keeps the real thing for whoever is close enough
+ * for you to see their legs move.
+ */
+const SPRITE_DISTANCE = 26;
+
+/** Is this player drawn as a sprite this frame? */
+function drawAsSprite(x: number, z: number): boolean {
+  const mode = settings.spriteMode;
+  if (mode === 'off') return false;
+  if (mode === 'all') return true;
+  return Math.hypot(stage.camera.position.x - x, stage.camera.position.z - z) > SPRITE_DISTANCE;
+}
+
 function frame(now: number): void {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
+
+  // Once a frame, not once a tick: a button press is announced exactly once
+  // however many simulation steps the frame has to catch up on.
+  controls.poll();
+  padNav.update(dt);
 
   if (running && socket) {
     // Fixed-step prediction so the local sim matches the server exactly.
@@ -487,12 +544,27 @@ function drawWorld(view: NonNullable<ReturnType<MatchState['sample']>>, dt: numb
   const seen = new Set<number>();
   let myPlayer: RenderPlayer | null = null;
 
+  // Baking is deferred until somebody actually asks for sprites; it costs a
+  // fraction of a second and most players will never turn it on.
+  if (settings.spriteMode !== 'off' && !sprites.manifest) sprites.prepare(view.players);
+
+  sprites.begin();
   for (const p of view.players) {
     seen.add(p.id);
     const rig = rigFor(p);
     const controlled = p.id === state.myPlayerId;
     if (controlled) myPlayer = p;
     poseRig(rig, p.x, p.z, p.facing, p.speed, p.act, p.actTimer, dt, p.powerup, controlled || (!p.bot && p.controlled));
+
+    // The rig is posed either way: it still owns the shadow, the selection ring
+    // and the stride phase that tells the sprite which frame of the run it is on.
+    const asSprite = drawAsSprite(p.x, p.z) && sprites.manifest !== null;
+    rig.body.visible = !asSprite;
+    if (asSprite) {
+      const m = sprites.manifest!;
+      const frame = frameFor(m, p.act, p.actTimer, p.speed, rig.stride);
+      sprites.add(p.team, p.role, p.x, p.z, p.facing, frame, rig.build, stage.camera);
+    }
 
     const tag = nameTags.get(p.id);
     if (tag) tag.position.set(p.x, 2.6, p.z);
@@ -502,6 +574,8 @@ function drawWorld(view: NonNullable<ReturnType<MatchState['sample']>>, dt: numb
       sfx.step(p.speed, now / 1000);
     }
   }
+
+  sprites.end();
 
   for (const [id, rig] of rigs) {
     if (!seen.has(id)) {
