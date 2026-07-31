@@ -1,15 +1,29 @@
 import { GOAL_HALF_WIDTH, HALF_LENGTH, HALF_WIDTH, TEAM_INFO } from '@shared/constants.js';
-import { MatchPhase, POWERUP_INFO, PowerupType } from '@shared/types.js';
+import { MatchPhase, POWERUP_INFO, PowerupType, type Role } from '@shared/types.js';
+import { applyStatic, onLangChange, t, type Key } from '../i18n.js';
 import type { RenderState } from '../net/state.js';
 
-const PHASE_LABEL: Record<number, string> = {
-  [MatchPhase.Warmup]: 'CALENTANDO',
-  [MatchPhase.Kickoff]: 'SAQUE',
-  [MatchPhase.Play]: 'EN JUEGO',
-  [MatchPhase.GoalCelebration]: 'GOOOOL',
-  [MatchPhase.FreeKick]: 'TIRO LIBRE',
-  [MatchPhase.FullTime]: 'FINAL',
+const PHASE_KEY: Record<number, Key> = {
+  [MatchPhase.Warmup]: 'phase.warmup',
+  [MatchPhase.Kickoff]: 'phase.kickoff',
+  [MatchPhase.Play]: 'phase.play',
+  [MatchPhase.GoalCelebration]: 'phase.goal',
+  [MatchPhase.FreeKick]: 'phase.freekick',
+  [MatchPhase.FullTime]: 'phase.fulltime',
 };
+
+const ROLE_KEY: Key[] = [
+  'role.keeper',
+  'role.defender',
+  'role.midfielder',
+  'role.winger',
+  'role.striker',
+];
+
+/** Localised name for a role, used on the HUD and in the lobby feed. */
+export function roleName(role: Role): string {
+  return t(ROLE_KEY[role] ?? 'role.midfielder');
+}
 
 function el<T extends HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
@@ -32,20 +46,36 @@ export class Hud {
   private powerup = el('powerup');
   private powerupLabel = el('powerup-label');
   private powerupBar = el('powerup-bar');
-  private you = el('you');
+  private youLabel = el('you');
   private pingLabel = el('ping');
   private radar = el<HTMLCanvasElement>('radar');
   private radarCtx = this.radar.getContext('2d')!;
   private help = el('help');
   private lastGoalCount = 0;
+  /** In training the clock counts the drill, not the match. */
+  private trainingTime: number | null = null;
+  private you = { name: '', team: 0, role: 0 as Role };
 
   constructor() {
     this.homeBadge.textContent = TEAM_INFO[0].short;
     this.awayBadge.textContent = TEAM_INFO[1].short;
+    onLangChange(() => {
+      this.setYou(this.you.name, this.you.team, this.you.role);
+      applyStatic();
+    });
   }
 
   show(): void {
     el('hud').classList.remove('hidden');
+  }
+
+  /** Feed the drill clock in, or null to go back to the match clock. */
+  setTrainingTime(seconds: number | null): void {
+    this.trainingTime = seconds;
+  }
+
+  setChatHint(key: string): void {
+    this.chatinput.placeholder = t('hud.chat.ph', { key });
   }
 
   toggleHelp(): void {
@@ -56,19 +86,28 @@ export class Hud {
     this.pingLabel.textContent = String(Math.round(ms));
   }
 
-  setYou(name: string, team: number, role: string): void {
-    this.you.textContent = `${name} · ${TEAM_INFO[team]?.short ?? '??'} · ${role}`;
-    this.you.style.color = `#${(TEAM_INFO[team]?.primary ?? 0xffffff).toString(16).padStart(6, '0')}`;
+  setYou(name: string, team: number, role: Role): void {
+    this.you = { name, team, role };
+    if (!name) return;
+    this.youLabel.textContent = `${name} · ${TEAM_INFO[team]?.short ?? '??'} · ${roleName(role)}`;
+    this.youLabel.style.color = `#${(TEAM_INFO[team]?.primary ?? 0xffffff).toString(16).padStart(6, '0')}`;
   }
 
   update(state: RenderState, myId: number): void {
     this.homeScore.textContent = String(state.score[0]);
     this.awayScore.textContent = String(state.score[1]);
 
-    const secs = Math.max(0, Math.ceil(state.clock));
-    this.clock.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
-    this.clock.style.color = secs <= 30 && state.phase === MatchPhase.Play ? '#ff6a4a' : '';
-    this.phaseLabel.textContent = PHASE_LABEL[state.phase] ?? '';
+    if (this.trainingTime !== null) {
+      const secs = Math.max(0, Math.floor(this.trainingTime));
+      this.clock.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+      this.clock.style.color = '';
+      this.phaseLabel.textContent = t('phase.training');
+    } else {
+      const secs = Math.max(0, Math.ceil(state.clock));
+      this.clock.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+      this.clock.style.color = secs <= 30 && state.phase === MatchPhase.Play ? '#ff6a4a' : '';
+      this.phaseLabel.textContent = t(PHASE_KEY[state.phase] ?? 'phase.play');
+    }
 
     const me = state.players.find((p) => p.id === myId);
     if (me) {
@@ -149,7 +188,7 @@ export class Hud {
     if (count === this.lastGoalCount) return;
     this.lastGoalCount = count;
     if (count === 0) return;
-    this.toast('¡GOOOOL!', scorer ? `${scorer} — ${TEAM_INFO[team]?.name ?? ''}` : TEAM_INFO[team]?.name ?? '');
+    this.toast(t('event.goal'), scorer ? `${scorer} — ${TEAM_INFO[team]?.name ?? ''}` : TEAM_INFO[team]?.name ?? '');
   }
 
   private drawRadar(state: RenderState, myId: number): void {

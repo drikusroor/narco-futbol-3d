@@ -3,6 +3,19 @@
  * referee's whistle, a crowd made of filtered noise. No audio files to load,
  * and swapping in real recordings later is a matter of replacing these calls.
  */
+function loadVolume(): number {
+  try {
+    const raw = localStorage.getItem('nf.volume');
+    if (raw !== null) {
+      const v = Number(raw);
+      if (Number.isFinite(v)) return Math.max(0, Math.min(1, v));
+    }
+  } catch {
+    // no storage; fall back to the default level
+  }
+  return 0.55;
+}
+
 export class Sfx {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
@@ -11,6 +24,8 @@ export class Sfx {
   private noiseBuffer: AudioBuffer | null = null;
   private lastStep = 0;
   muted = false;
+  /** 0..1 from the settings screen; 0.55 is the old fixed level. */
+  private volume = loadVolume();
 
   /** Must be called from a user gesture - browsers insist. */
   start(): void {
@@ -23,7 +38,7 @@ export class Sfx {
     this.ctx = ctx;
 
     this.master = ctx.createGain();
-    this.master.gain.value = 0.55;
+    this.master.gain.value = this.muted ? 0 : this.volume;
     this.master.connect(ctx.destination);
 
     // Pre-render a second of noise; everything percussive is built from it.
@@ -37,8 +52,28 @@ export class Sfx {
 
   toggleMute(): boolean {
     this.muted = !this.muted;
-    if (this.master) this.master.gain.value = this.muted ? 0 : 0.55;
+    this.applyGain();
     return this.muted;
+  }
+
+  /** Master volume, 0..1. Unmutes as soon as you drag it up. */
+  setVolume(v: number): void {
+    this.volume = Math.max(0, Math.min(1, v));
+    if (this.volume > 0) this.muted = false;
+    this.applyGain();
+    try {
+      localStorage.setItem('nf.volume', String(this.volume));
+    } catch {
+      // not persisting is survivable
+    }
+  }
+
+  getVolume(): number {
+    return this.volume;
+  }
+
+  private applyGain(): void {
+    if (this.master) this.master.gain.value = this.muted ? 0 : this.volume;
   }
 
   private get t(): number {

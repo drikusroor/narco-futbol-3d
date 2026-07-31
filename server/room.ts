@@ -6,7 +6,9 @@ import {
   MatchPhase,
   Role,
   emptyInput,
+  isDrillId,
   type ClientMessage,
+  type DrillId,
   type LobbyPlayerInfo,
   type PlayerInput,
   type PlayerState,
@@ -25,6 +27,7 @@ import {
   stepWorld,
 } from '@shared/sim/index.js';
 import { BotBrain } from './ai/bot.js';
+import { Trainer } from './training.js';
 
 export interface Client {
   id: number;
@@ -55,6 +58,8 @@ export class Room {
   private tickCounter = 0;
   private nextClientId = 1;
   private seed: number;
+  /** Set while this room is somebody's private practice pitch. */
+  private trainer: Trainer | null = null;
 
   constructor(name: string, config: Partial<WorldConfig> = {}) {
     this.name = name;
@@ -116,6 +121,8 @@ export class Room {
 
     const inputs = new Map<number, PlayerInput>();
     for (const p of world.players) {
+      // Players a drill has sent to the touchline take no part in it.
+      if (this.trainer?.isParked(p.id)) continue;
       if (p.bot) {
         const brain = this.brains.get(p.id);
         if (brain) inputs.set(p.id, brain.think(world, p, TICK_DT));
@@ -126,11 +133,15 @@ export class Room {
     }
 
     stepWorld(world, inputs, TICK_DT);
+    this.trainer?.afterStep();
 
     this.tickCounter++;
     if (this.tickCounter % SNAPSHOT_INTERVAL_TICKS === 0) {
       const buf = encodeSnapshot(world, now);
       for (const c of this.clients.values()) c.send(buf);
+      if (this.trainer && this.tickCounter % (SNAPSHOT_INTERVAL_TICKS * 4) === 0) {
+        this.broadcastJson({ t: 'drill', ...this.trainer.report() });
+      }
     }
     if (this.tickCounter % (TICK_RATE * 2) === 0) this.heartbeat(now);
   }
@@ -145,6 +156,8 @@ export class Room {
   // --- joining / leaving ----------------------------------------------------
 
   join(transport: Pick<Client, 'send' | 'close'>, name: string, preferred?: Team): Client | null {
+    // A practice pitch belongs to one player: everyone else is on the touchline.
+    if (this.trainer && this.clients.size >= 1) return null;
     const slot = this.pickSlot(preferred);
     if (!slot) return null;
 
@@ -173,7 +186,10 @@ export class Room {
       snapshotRate: TICK_RATE / SNAPSHOT_INTERVAL_TICKS,
     });
     this.broadcastLobby();
-    this.broadcastNotice(`${name} joined ${teamName(slot.team)}`);
+    this.broadcastNotice(`${name} joined ${teamName(slot.team)}`, 'notice.joined', {
+      name,
+      team: teamName(slot.team),
+    });
     this.start();
     return full;
   }
@@ -192,8 +208,11 @@ export class Room {
     }
     this.clients.delete(clientId);
     this.broadcastLobby();
-    this.broadcastNotice(`${client.name} left`);
-    if (this.isEmpty) this.stop();
+    this.broadcastNotice(`${client.name} left`, 'notice.left', { name: client.name });
+    if (this.isEmpty) {
+      this.trainer = null;
+      this.stop();
+    }
   }
 
   /** Prefer the thinner team, then the most advanced free shirt on it. */
@@ -255,6 +274,16 @@ export class Room {
         this.applyConfig(client, msg);
         break;
       }
+      case 'training': {
+        if (!isDrillId(msg.drill)) break;
+        // Repeat messages for the same drill only report tutorial progress.
+        if (this.trainer && this.trainer.drill === msg.drill) {
+          if (typeof msg.stage === 'number') this.trainer.setStage(msg.stage);
+          break;
+        }
+        this.setTraining(client, msg.drill);
+        break;
+      }
       default:
         break;
     }
@@ -266,7 +295,11 @@ export class Room {
     const settled =
       this.world.match.phase === MatchPhase.Warmup || this.world.match.phase === MatchPhase.FullTime;
     if (this.clients.size > 1 && !settled) {
-      this.sendJson(client, { t: 'notice', text: 'match in progress - settings locked' });
+      this.sendJson(client, {
+        t: 'notice',
+        text: 'match in progress - settings locked',
+        key: 'notice.locked',
+      });
       return;
     }
     const patch = sanitizeConfig({
@@ -294,8 +327,36 @@ export class Room {
       resetMatch(world);
       this.reseatClients();
     }
-    this.broadcastNotice(`${client.name} changed the match settings`);
+    // On your own there is nobody to tell, and it reads like a bug.
+    if (this.clients.size > 1) {
+      this.broadcastNotice(`${client.name} changed the match settings`, 'notice.config', {
+        name: client.name,
+      });
+    }
     this.broadcastLobby();
+  }
+
+  /**
+   * Turn this room into a private practice pitch. The drill takes over the
+   * shape of the game - who is on it, where the ball starts - but the rules and
+   * the physics are the same ones a real match runs.
+   */
+  private setTraining(client: Client, drill: DrillId): void {
+    if (this.clients.size > 1) {
+      this.sendJson(client, {
+        t: 'notice',
+        text: 'training is for a private pitch',
+        key: 'notice.trainingBusy',
+      });
+      return;
+    }
+    const world = this.world;
+    world.config.powerupsEnabled = false;
+    world.match.score = [0, 0];
+    world.match.goalCount = 0;
+    this.trainer = new Trainer(world, drill, client.playerId);
+    this.sendJson(client, { t: 'drill', ...this.trainer.report() });
+    this.start();
   }
 
   private switchTeam(client: Client, team: Team): void {
@@ -344,6 +405,7 @@ export class Room {
     for (const p of this.world.players) {
       if (p.team !== current.team || p.id === current.id) continue;
       if (!p.bot || p.role === Role.Keeper) continue;
+      if (this.trainer?.isParked(p.id)) continue;
       const d = dist2(p.pos, this.world.ball.pos);
       if (d < bestD) {
         bestD = d;
@@ -366,6 +428,7 @@ export class Room {
     best.controlled = true;
     this.brains.delete(best.id);
     client.playerId = best.id;
+    this.trainer?.setHuman(best.id);
     this.inputs.set(best.id, { latest: emptyInput(), lastSeq: 0 });
     this.sendJson(client, {
       t: 'welcome',
@@ -455,8 +518,8 @@ export class Room {
     });
   }
 
-  broadcastNotice(text: string): void {
-    this.broadcastJson({ t: 'notice', text });
+  broadcastNotice(text: string, key?: string, params?: Record<string, string | number>): void {
+    this.broadcastJson({ t: 'notice', text, key, params });
   }
 
   get status(): { name: string; humans: number; phase: MatchPhase; score: [number, number] } {

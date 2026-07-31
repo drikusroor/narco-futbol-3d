@@ -1,19 +1,33 @@
 import * as THREE from 'three';
 import { BALL_RADIUS, TEAM_INFO, TICK_DT } from '@shared/constants.js';
 import { clamp } from '@shared/math.js';
-import { MatchPhase, PlayerAct, POWERUP_INFO, Role, type ServerMessage } from '@shared/types.js';
+import {
+  MatchPhase,
+  PlayerAct,
+  POWERUP_INFO,
+  Role,
+  type DrillId,
+  type DrillReport,
+  type ServerMessage,
+} from '@shared/types.js';
 import type { Snapshot } from '@shared/protocol.js';
 
 import { Sfx } from './audio/sfx.js';
 import { initDiscord } from './discord.js';
+import { applyStatic, onLangChange, t, type Key } from './i18n.js';
+import { keyLabel } from './input/bindings.js';
 import { Controls } from './input/controls.js';
 import { GameSocket } from './net/socket.js';
 import { MatchState, type RenderPlayer } from './net/state.js';
 import { makeBall, makePlayerRig, makePowerup, makeReferee, poseRig, tintPowerup, type PlayerRig } from './render/actors.js';
 import { BallTrail, Effects } from './render/effects.js';
+import { DrillMarkers } from './render/markers.js';
 import { BroadcastCamera, createStage } from './render/scene.js';
 import { buildStadium, decayCrowdHype, setCrowdHype } from './render/stadium.js';
 import { Hud } from './ui/hud.js';
+import { Settings } from './ui/settings.js';
+import { DrillPanel, DrillPicker } from './ui/training.js';
+import { Tutorial } from './ui/tutorial.js';
 
 const canvas = document.getElementById('stage') as HTMLCanvasElement;
 const stage = createStage(canvas);
@@ -29,6 +43,7 @@ const ball = makeBall();
 stage.scene.add(ball.group);
 const referee = makeReferee();
 stage.scene.add(referee.group);
+const markers = new DrillMarkers(stage.scene);
 
 const rigs = new Map<number, PlayerRig>();
 const pickupMeshes = new Map<number, THREE.Group>();
@@ -40,42 +55,77 @@ let accumulator = 0;
 let lastFrame = performance.now();
 let myName = 'Anon';
 let lobbyNames = new Map<number, string>();
+/** Set when this session is a solo practice rather than a match. */
+let pendingDrill: DrillId | null = null;
+let drillReport: DrillReport | null = null;
+/** True while we are the ones hanging up, so the close is not an error. */
+let leaving = false;
 
 // --- input ------------------------------------------------------------------
 
-const controls = new Controls(canvas, (key) => onKeyPress(key));
+const controls = new Controls(
+  canvas,
+  (action) => onAction(action),
+  (key) => onRawKey(key),
+);
+const settings = new Settings(
+  controls,
+  sfx,
+  () => refreshChatHint(),
+  () => leaveMatch(),
+);
+const drillPanel = new DrillPanel();
+const tutorial = new Tutorial(
+  controls,
+  () => hud.toast(t('tutorial.done.title'), '', 2600),
+  (stage) => socket?.send({ t: 'training', drill: 'tutorial', stage }),
+);
 
-function onKeyPress(key: string): void {
-  if (hud.chatOpen) {
-    if (key === 'Enter') {
-      const text = hud.closeChat();
-      controls.typing = false;
-      if (text) socket?.send({ t: 'chat', text });
-    } else if (key === 'Escape') {
-      hud.closeChat();
-      controls.typing = false;
-    }
-    return;
+/** Chat is the one place a raw key still matters, because you are typing. */
+function onRawKey(key: string): void {
+  if (!hud.chatOpen) return;
+  if (key === 'enter') {
+    const text = hud.closeChat();
+    controls.typing = false;
+    if (text) socket?.send({ t: 'chat', text });
+  } else if (key === 'escape') {
+    hud.closeChat();
+    controls.typing = false;
   }
-  switch (key) {
-    case 't':
-      hud.openChat();
-      controls.typing = true;
+}
+
+function onAction(action: string): void {
+  if (hud.chatOpen) return;
+  switch (action) {
+    case 'chat':
+      if (running && !settings.open) {
+        hud.openChat();
+        controls.typing = true;
+      }
       break;
-    case 'h':
+    case 'help':
       hud.toggleHelp();
       break;
-    case 'm':
-      hud.note(sfx.toggleMute() ? 'sonido apagado' : 'sonido encendido');
+    case 'settings':
+      settings.toggle();
+      break;
+    case 'mute':
+      hud.note(sfx.toggleMute() ? t('event.muted') : t('event.unmuted'));
       break;
     default:
       break;
   }
 }
 
+function refreshChatHint(): void {
+  hud.setChatHint(keyLabel(controls.bindings.chat[0] || 't'));
+}
+
 // --- menu -------------------------------------------------------------------
 
 const menu = document.getElementById('menu')!;
+const menuMain = document.getElementById('menu-main')!;
+const menuTraining = document.getElementById('menu-training')!;
 const loading = document.getElementById('loading')!;
 const nameInput = document.getElementById('name-input') as HTMLInputElement;
 const roomInput = document.getElementById('room-input') as HTMLInputElement;
@@ -93,38 +143,78 @@ void initDiscord().then((ctx) => {
     discordRoom = ctx.room;
     roomInput.value = ctx.room;
     roomInput.disabled = true;
-    document.getElementById('menu-note')!.textContent =
-      'Everyone in this Discord activity joins the same pitch. Empty shirts are filled by bots.';
+    document.getElementById('menu-note')!.dataset.i18n = 'menu.discord';
+    applyStatic();
   }
 });
 
-document.getElementById('play-button')!.addEventListener('click', () => join());
+applyStatic();
+refreshChatHint();
+onLangChange(() => refreshChatHint());
 
-function join(): void {
+document.getElementById('play-button')!.addEventListener('click', () => join());
+document.getElementById('settings-button')!.addEventListener('click', () => settings.show());
+document.getElementById('tutorial-button')!.addEventListener('click', () =>
+  join({ drill: 'tutorial' }),
+);
+document.getElementById('training-button')!.addEventListener('click', () => {
+  menuMain.classList.add('hidden');
+  menuTraining.classList.remove('hidden');
+});
+document.getElementById('training-back')!.addEventListener('click', () => {
+  menuTraining.classList.add('hidden');
+  menuMain.classList.remove('hidden');
+});
+new DrillPicker((drill) => join({ drill }));
+
+/** A room nobody else will wander into, for solo practice. */
+function privateRoom(): string {
+  return `practica-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function join(opts: { drill?: DrillId } = {}): void {
   myName = (nameInput.value.trim() || 'Anon').slice(0, 18);
   localStorage.setItem('nf.name', myName);
-  const room = discordRoom ?? roomInput.value.trim() ?? 'estadio';
+  pendingDrill = opts.drill ?? null;
+  const room = pendingDrill ? privateRoom() : discordRoom ?? roomInput.value.trim();
   const teamValue = teamSelect.value;
 
   sfx.start();
   menu.classList.add('hidden');
   loading.classList.remove('hidden');
+  loading.querySelector('span')!.textContent = t('loading.connecting');
+  // Every room numbers its ticks from zero, so nothing from the last one keeps.
+  state.reset();
+  lastGoalCount = -1;
+  lobbyNames.clear();
 
   socket = new GameSocket({
     onOpen: () => {
       loading.classList.add('hidden');
       hud.show();
+      settings.setInGame(true);
       running = true;
     },
     onClose: (reason) => {
       running = false;
-      loading.classList.remove('hidden');
-      loading.querySelector('span')!.textContent = `DESCONECTADO — ${reason}`;
-      setTimeout(() => {
-        loading.classList.add('hidden');
-        menu.classList.remove('hidden');
-        document.getElementById('hud')!.classList.add('hidden');
-      }, 2200);
+      leaveTraining();
+      settings.setInGame(false);
+      const deliberate = leaving;
+      leaving = false;
+      if (!deliberate) {
+        loading.classList.remove('hidden');
+        loading.querySelector('span')!.textContent = t('loading.disconnected', { reason });
+      }
+      setTimeout(
+        () => {
+          loading.classList.add('hidden');
+          menu.classList.remove('hidden');
+          menuTraining.classList.add('hidden');
+          menuMain.classList.remove('hidden');
+          document.getElementById('hud')!.classList.add('hidden');
+        },
+        deliberate ? 0 : 2200,
+      );
     },
     onSnapshot: (snap: Snapshot, at: number) => {
       state.onSnapshot(snap, at);
@@ -135,8 +225,33 @@ function join(): void {
   socket.connect({
     room: room || 'estadio',
     name: myName,
-    team: teamValue === 'auto' ? undefined : Number(teamValue),
+    team: pendingDrill ? 0 : teamValue === 'auto' ? undefined : Number(teamValue),
   });
+}
+
+/** Walk off the pitch on purpose: no "disconnected" scare, straight to the menu. */
+function leaveMatch(): void {
+  if (!socket) return;
+  leaving = true;
+  socket.close();
+  running = false;
+  // close() detaches the socket, so nothing else will report the close.
+  socket = null;
+  leaveTraining();
+  settings.setInGame(false);
+  menu.classList.remove('hidden');
+  menuTraining.classList.add('hidden');
+  menuMain.classList.remove('hidden');
+  document.getElementById('hud')!.classList.add('hidden');
+}
+
+/** Put the training furniture away, whether we finished or got disconnected. */
+function leaveTraining(): void {
+  drillReport = null;
+  drillPanel.hide();
+  markers.clear();
+  tutorial.stop();
+  hud.setTrainingTime(null);
 }
 
 function handleServerMessage(msg: ServerMessage): void {
@@ -148,11 +263,12 @@ function handleServerMessage(msg: ServerMessage): void {
       if (msg.host) {
         socket?.send({
           t: 'config',
-          matchSeconds: Number(lengthSelect.value),
+          matchSeconds: pendingDrill ? 600 : Number(lengthSelect.value),
           teamSize: Number(sizeSelect.value),
           difficulty: Number(difficultySelect.value),
-          powerups: true,
+          powerups: !pendingDrill,
         });
+        if (pendingDrill) socket?.send({ t: 'training', drill: pendingDrill });
       }
       break;
     }
@@ -163,7 +279,7 @@ function handleServerMessage(msg: ServerMessage): void {
         controls.flip = mine.team === 1 ? -1 : 1;
         camera.flip = mine.team === 1 ? -1 : 1;
         const role = state.world.players.find((p) => p.id === mine.id)?.role ?? Role.Midfielder;
-        hud.setYou(mine.name, mine.team, ROLE_NAMES[role] ?? '');
+        hud.setYou(mine.name, mine.team, role);
         const ping = msg.players.find((p) => p.id === state.myPlayerId)?.ping ?? 0;
         hud.setPing(ping);
       }
@@ -174,26 +290,32 @@ function handleServerMessage(msg: ServerMessage): void {
       hud.chat(msg.from, msg.text, msg.team);
       break;
     case 'notice':
-      hud.note(msg.text);
+      hud.note(msg.key ? t(msg.key as Key, msg.params) : msg.text);
       break;
+    case 'drill': {
+      drillReport = msg;
+      drillTime = msg.time;
+      drillPanel.show(msg);
+      markers.set(msg.markers);
+      if (msg.drill === 'tutorial') {
+        drillPanel.hide();
+        if (!tutorial.running) tutorial.start();
+      }
+      break;
+    }
     default:
       break;
   }
 }
 
-const ROLE_NAMES: Record<number, string> = {
-  [Role.Keeper]: 'ARQUERO',
-  [Role.Defender]: 'DEFENSA',
-  [Role.Midfielder]: 'VOLANTE',
-  [Role.Winger]: 'EXTREMO',
-  [Role.Striker]: 'DELANTERO',
-};
-
 // --- reacting to the match --------------------------------------------------
 
 let lastGoalCount = -1;
+/** Drill clock, kept running locally between the server's updates. */
+let drillTime = 0;
 
 function handleEvents(snap: Snapshot): void {
+  tutorial.pushEvents(snap.events);
   for (const e of snap.events) {
     switch (e.t) {
       case 'kick':
@@ -213,8 +335,8 @@ function handleEvents(snap: Snapshot): void {
         }
         break;
       case 'foul': {
-        const name = lobbyNames.get(e.player) ?? 'alguien';
-        hud.note(`falta de ${name}`);
+        const name = lobbyNames.get(e.player) ?? t('event.someone');
+        hud.note(t('event.foul', { name }));
         break;
       }
       case 'goal': {
@@ -227,29 +349,31 @@ function handleEvents(snap: Snapshot): void {
         break;
       }
       case 'save':
-        hud.note('¡atajada!');
+        hud.note(t('event.save'));
         sfx.gasp();
         setCrowdHype(0.65);
         break;
       case 'post':
         sfx.post();
         effects.sparks(e.x, e.z);
-        hud.note('¡al palo!');
+        hud.note(t('event.post'));
         setCrowdHype(0.8);
         break;
       case 'whistle':
         sfx.whistle(e.kind === 'fulltime');
-        if (e.kind === 'fulltime') {
+        if (e.kind === 'fulltime' && !drillReport) {
           const [a, b] = snap.score;
-          hud.toast('FINAL', a === b ? 'EMPATE' : `${TEAM_INFO[a > b ? 0 : 1].name}`, 4000);
+          hud.toast(t('event.fulltime'), a === b ? t('event.draw') : TEAM_INFO[a > b ? 0 : 1].name, 4000);
         }
-        if (e.kind === 'foul') hud.toast('¡FALTA!', '', 1400);
+        if (e.kind === 'foul') hud.toast(t('event.foul.toast'), '', 1400);
         break;
       case 'pickup': {
         sfx.powerup();
         const info = POWERUP_INFO[e.type];
         const who = lobbyNames.get(e.player) ?? '';
-        if (e.player === state.myPlayerId) hud.toast(info?.label ?? '', info?.blurb ?? '', 1800);
+        // The names are flavour and stay in Spanish; the explanation is not.
+        const blurb = info ? t(`powerup.${info.key}.blurb` as Key) : '';
+        if (e.player === state.myPlayerId) hud.toast(info?.label ?? '', blurb, 1800);
         else if (who) hud.note(`${who} → ${info?.label ?? ''}`);
         break;
       }
@@ -346,6 +470,12 @@ function frame(now: number): void {
 
   const view = state.sample(now);
   if (view) drawWorld(view, dt, now);
+
+  if (drillReport) {
+    drillTime += dt;
+    hud.setTrainingTime(drillTime);
+    markers.update(now / 1000);
+  }
 
   effects.update(dt);
   decayCrowdHype(dt);
@@ -444,10 +574,20 @@ function drawWorld(view: NonNullable<ReturnType<MatchState['sample']>>, dt: numb
   const danger = Math.abs(view.ball.x) / 40;
   sfx.setCrowd(clamp(danger * 0.5 + (view.phase === MatchPhase.GoalCelebration ? 0.5 : 0), 0, 1));
 
+  if (tutorial.running) {
+    tutorial.observe({ view, me: myPlayer ?? undefined, myId: state.myPlayerId, dt });
+  }
+
   hud.update(view, state.myPlayerId);
 }
 
 requestAnimationFrame(frame);
+
+// A handle on the innards for headless debugging. Dev builds only - Vite
+// folds this away entirely when the game is bundled for production.
+if (import.meta.env.DEV) {
+  (window as unknown as { __nf: unknown }).__nf = { state, controls, tutorial, hud, settings };
+}
 
 // Keep the audio context alive across tab switches.
 document.addEventListener('visibilitychange', () => {

@@ -491,7 +491,7 @@ canvas#stage {
   border-color: var(--gold);
 }
 
-#play-button {
+button.primary {
   width: 100%;
   margin-top: 6px;
   padding: 14px;
@@ -506,11 +506,42 @@ canvas#stage {
   cursor: pointer;
   box-shadow: 0 4px 0 #8c3a10;
   transition: transform 0.08s ease;
+  font-family: var(--font);
 }
 
-#play-button:active {
+button.primary:active {
   transform: translateY(3px);
   box-shadow: 0 1px 0 #8c3a10;
+}
+
+button.ghost {
+  flex: 1;
+  padding: 9px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--font);
+}
+
+button.ghost:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+button.ghost.wide {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.button-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .note {
@@ -539,7 +570,291 @@ canvas#stage {
   color: var(--gold);
 }
 
+/* --- Settings ------------------------------------------------------------- */
+#settings {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(8, 4, 3, 0.86);
+  overflow-y: auto;
+}
+
+#settings .plate {
+  width: min(560px, 96vw);
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 22px 26px;
+  background: rgba(18, 9, 7, 0.96);
+  border: 2px solid var(--edge);
+  border-radius: 10px;
+}
+
+#settings h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-style: italic;
+  letter-spacing: 5px;
+  color: var(--gold);
+}
+
+/* The way out never scrolls off the bottom of a long controls list. */
+#settings .button-row {
+  position: sticky;
+  bottom: -22px;
+  margin-top: 14px;
+  padding: 10px 0 4px;
+  background: linear-gradient(to top, rgba(18, 9, 7, 1) 70%, rgba(18, 9, 7, 0));
+}
+
+#settings .button-row button.primary {
+  flex: 1;
+  width: auto;
+  margin-top: 0;
+  padding: 11px;
+  font-size: 16px;
+  letter-spacing: 4px;
+}
+
+#settings h3 {
+  margin: 18px 0 6px;
+  font-size: 10px;
+  letter-spacing: 4px;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+
+.chip-row {
+  display: flex;
+  gap: 8px;
+}
+
+.chip {
+  padding: 7px 14px;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--font);
+}
+
+.chip.on {
+  background: var(--gold);
+  color: #23100a;
+  font-weight: 700;
+}
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.slider-row input {
+  flex: 1;
+  accent-color: var(--gold);
+}
+
+.slider-row b {
+  font-family: var(--mono);
+  color: var(--ink);
+  min-width: 28px;
+  text-align: right;
+}
+
+.bind-row {
+  display: grid;
+  grid-template-columns: 1fr 108px 108px;
+  gap: 6px;
+  align-items: center;
+  padding: 2px 0;
+  font-size: 12.5px;
+}
+
+.bind-row span {
+  color: var(--ink);
+}
+
+.bind-key {
+  padding: 5px 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--gold);
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.bind-key:hover {
+  border-color: var(--gold);
+}
+
+.bind-key.listening {
+  color: #23100a;
+  background: var(--gold);
+  animation: blink 0.7s steps(2, end) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* Controls list reused by the in-game help panel */
+#help-list .bind-row {
+  grid-template-columns: 1fr 100px 100px;
+}
+
+#help-list .bind-key {
+  cursor: default;
+}
+
+/* --- Drill picker ---------------------------------------------------------- */
+.drill-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--edge);
+  border-left: 3px solid var(--gold);
+  border-radius: 4px;
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--font);
+}
+
+.drill-card:hover {
+  background: rgba(255, 211, 77, 0.12);
+}
+
+.drill-card b {
+  display: block;
+  font-size: 15px;
+  letter-spacing: 1px;
+  color: var(--gold);
+}
+
+.drill-card em {
+  font-size: 11.5px;
+  font-style: normal;
+  color: var(--dim);
+}
+
+/* --- Drill panel and tutorial coach ---------------------------------------- */
+#drill {
+  position: absolute;
+  left: 16px;
+  top: 90px;
+  width: 260px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-left: 3px solid var(--gold);
+  border-radius: 4px;
+}
+
+#drill h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  letter-spacing: 3px;
+  color: var(--gold);
+}
+
+#drill p {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  color: var(--ink);
+  line-height: 1.45;
+}
+
+#drill-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+}
+
+#drill-stats b {
+  color: var(--ink);
+  font-size: 14px;
+  display: block;
+}
+
+#tutorial {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  width: min(560px, 92vw);
+  padding: 12px 16px 14px;
+  text-align: center;
+  background: var(--panel);
+  border: 2px solid var(--edge);
+  border-radius: 6px;
+  pointer-events: auto;
+}
+
+#tutorial .step {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: var(--dim);
+}
+
+#tutorial .task {
+  margin: 4px 0 3px;
+  font-size: 19px;
+  font-weight: 700;
+  font-style: italic;
+  letter-spacing: 1px;
+  color: var(--gold);
+}
+
+#tutorial .tip {
+  font-size: 12px;
+  color: var(--ink);
+  opacity: 0.85;
+  line-height: 1.45;
+}
+
+#tutorial.done .task {
+  color: #9dffbe;
+}
+
+#tutorial-skip {
+  margin-top: 8px;
+  padding: 4px 12px;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--dim);
+  background: none;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: var(--font);
+}
+
 @media (max-width: 720px) {
+  #drill {
+    display: none;
+  }
+  .bind-row {
+    grid-template-columns: 1fr 84px 84px;
+  }
   #chatbox,
   #feed {
     display: none;
