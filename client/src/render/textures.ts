@@ -15,6 +15,8 @@ import {
  * loading screens, and the whole build stays a couple of hundred kilobytes.
  */
 
+const TAU = Math.PI * 2;
+
 function canvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const c = document.createElement('canvas');
   c.width = w;
@@ -94,35 +96,43 @@ export function pitchTexture(): THREE.Texture {
   ctx.fill();
 
   for (const sign of [-1, 1]) {
-    // Penalty area.
-    const bx = sign > 0 ? toX(HALF_LENGTH - BOX_LENGTH) : toX(-HALF_LENGTH);
-    ctx.strokeRect(bx, toY(-BOX_HALF_WIDTH), BOX_LENGTH * PX, BOX_HALF_WIDTH * 2 * PX);
+    // Penalty area. The back edge sits on the goal line, which is itself inset,
+    // so both boxes are shortened by the same amount to stay flush with it.
+    const goalLine = sign > 0 ? HALF_LENGTH - inset : -HALF_LENGTH + inset;
+    const bx = sign > 0 ? toX(HALF_LENGTH - BOX_LENGTH) : toX(goalLine);
+    ctx.strokeRect(bx, toY(-BOX_HALF_WIDTH), (BOX_LENGTH - inset) * PX, BOX_HALF_WIDTH * 2 * PX);
     // Six yard box.
-    const sx = sign > 0 ? toX(HALF_LENGTH - BOX_LENGTH * 0.38) : toX(-HALF_LENGTH);
+    const sixLength = BOX_LENGTH * 0.38 - inset;
+    const sx = sign > 0 ? toX(HALF_LENGTH - BOX_LENGTH * 0.38) : toX(goalLine);
     ctx.strokeRect(
       sx,
       toY(-GOAL_HALF_WIDTH - 2.5),
-      BOX_LENGTH * 0.38 * PX,
+      sixLength * PX,
       (GOAL_HALF_WIDTH + 2.5) * 2 * PX,
     );
-    // Penalty spot and D.
+    // Penalty spot and D. The D is only the part of the circle that falls
+    // outside the box, so the sweep is derived from where it meets that line
+    // rather than eyeballed - otherwise the arc cuts back into the area.
     const spot = sign * (HALF_LENGTH - BOX_LENGTH * 0.62);
     ctx.beginPath();
     ctx.arc(toX(spot), toY(0), 0.2 * PX, 0, Math.PI * 2);
     ctx.fill();
+    const arcR = 7;
+    const toBoxEdge = BOX_LENGTH * 0.38; // distance from the spot to the box line
+    const half = Math.acos(Math.min(1, toBoxEdge / arcR));
+    // The D opens away from the goal: back toward halfway.
+    const mid = sign > 0 ? Math.PI : 0;
     ctx.beginPath();
-    ctx.arc(
-      toX(spot),
-      toY(0),
-      7 * PX,
-      sign > 0 ? Math.PI * 0.62 : -Math.PI * 0.38,
-      sign > 0 ? Math.PI * 1.38 : Math.PI * 0.38,
-    );
+    ctx.arc(toX(spot), toY(0), arcR * PX, mid - half, mid + half);
     ctx.stroke();
-    // Corner arcs.
+    // Corner arcs: a quarter circle, curving into the pitch and nothing else.
     for (const zs of [-1, 1]) {
+      const ax = sign > 0 ? Math.PI : 0; // back along the pitch
+      const az = zs > 0 ? -Math.PI / 2 : Math.PI / 2; // back across it
+      const sweep = (((az - ax) % TAU) + TAU) % TAU;
+      const [a0, a1] = sweep > Math.PI ? [az, ax] : [ax, az];
       ctx.beginPath();
-      ctx.arc(toX(sign * (HALF_LENGTH - inset)), toY(zs * (HALF_WIDTH - inset)), 1 * PX, 0, Math.PI * 2);
+      ctx.arc(toX(sign * (HALF_LENGTH - inset)), toY(zs * (HALF_WIDTH - inset)), 1 * PX, a0, a1);
       ctx.stroke();
     }
   }

@@ -198,11 +198,13 @@ export function buildStadium(scene: THREE.Scene): { crowd: THREE.InstancedMesh[]
     group.add(stand);
   };
 
+  // A stand is built facing its own local -Z, so each one is turned until that
+  // points back at the centre circle - otherwise the crowd watches the car park.
   const standGap = 4.5;
   buildStand(PITCH_LENGTH + 12, 12, new THREE.Vector3(0, 0, HALF_WIDTH + standGap), 0);
   buildStand(PITCH_LENGTH + 12, 12, new THREE.Vector3(0, 0, -HALF_WIDTH - standGap), Math.PI);
-  buildStand(PITCH_WIDTH + 8, 9, new THREE.Vector3(HALF_LENGTH + standGap + GOAL_DEPTH, 0, 0), -Math.PI / 2);
-  buildStand(PITCH_WIDTH + 8, 9, new THREE.Vector3(-HALF_LENGTH - standGap - GOAL_DEPTH, 0, 0), Math.PI / 2);
+  buildStand(PITCH_WIDTH + 8, 9, new THREE.Vector3(HALF_LENGTH + standGap + GOAL_DEPTH, 0, 0), Math.PI / 2);
+  buildStand(PITCH_WIDTH + 8, 9, new THREE.Vector3(-HALF_LENGTH - standGap - GOAL_DEPTH, 0, 0), -Math.PI / 2);
 
   // --- banners in the stands --------------------------------------------------
   const banners: [string, string, string, number, number][] = [

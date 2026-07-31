@@ -21,7 +21,7 @@
         </div>
         <div class="clock">
           <span id="clock">5:00</span>
-          <span id="phase-label">CALENTANDO</span>
+          <span id="phase-label"></span>
         </div>
         <div class="team away">
           <span class="score" id="away-score">0</span>
@@ -34,8 +34,8 @@
       <div id="bottom-left">
         <div id="powerup" class="hidden"><span id="powerup-label"></span><i id="powerup-bar"></i></div>
         <div id="meters">
-          <div class="meter stamina"><i id="stamina-bar"></i><label>AIRE</label></div>
-          <div class="meter charge"><i id="charge-bar"></i><label>FUERZA</label></div>
+          <div class="meter stamina"><i id="stamina-bar"></i><label data-i18n="hud.stamina">AIR</label></div>
+          <div class="meter charge"><i id="charge-bar"></i><label data-i18n="hud.charge">POWER</label></div>
         </div>
         <div id="you">—</div>
       </div>
@@ -44,56 +44,60 @@
 
       <div id="feed"></div>
 
+      <!-- Drill panel: only visible in training -->
+      <div id="drill" class="hidden">
+        <h4 id="drill-title"></h4>
+        <p id="drill-prompt"></p>
+        <div id="drill-stats"></div>
+      </div>
+
+      <!-- Tutorial coach -->
+      <div id="tutorial" class="hidden">
+        <div class="step" id="tutorial-step"></div>
+        <div class="task" id="tutorial-task"></div>
+        <div class="tip" id="tutorial-tip"></div>
+        <button id="tutorial-skip" data-i18n="tutorial.skip">Skip</button>
+      </div>
+
       <div id="chatbox">
         <div id="chatlog"></div>
-        <input id="chatinput" maxlength="140" placeholder="Press T to talk…" />
+        <input id="chatinput" maxlength="140" />
       </div>
 
       <div id="netstat"><span id="ping">--</span> ms</div>
 
       <div id="help" class="hidden">
-        <h3>Controles</h3>
-        <table>
-          <tr><td>WASD / arrows</td><td>Move</td></tr>
-          <tr><td>Shift</td><td>Sprint</td></tr>
-          <tr><td>J / Left click</td><td>Pass (hold = through ball)</td></tr>
-          <tr><td>K / Right click</td><td>Shoot (hold = harder &amp; higher)</td></tr>
-          <tr><td>L</td><td>Lofted pass / cross</td></tr>
-          <tr><td>Space</td><td>Tackle (sprinting = slide)</td></tr>
-          <tr><td>Q</td><td>Switch to the nearest team-mate</td></tr>
-          <tr><td>T</td><td>Chat</td></tr>
-          <tr><td>H</td><td>Toggle this panel</td></tr>
-          <tr><td>M</td><td>Mute</td></tr>
-        </table>
-        <p class="small">Gamepad: left stick move, A pass, B shoot, Y lob, X tackle, RB sprint, LB switch.</p>
+        <h3 data-i18n="settings.controls">Controls</h3>
+        <div id="help-list"></div>
+        <p class="small" data-i18n="settings.gamepad"></p>
       </div>
     </div>
 
     <!-- Front end -->
     <div id="menu">
-      <div class="plate">
+      <div class="plate" id="menu-main">
         <h1><span>NARCO</span><em>FUTBOL</em></h1>
-        <p class="tagline">Cinco contra cinco. Sin árbitro que valga. 1988.</p>
+        <p class="tagline" data-i18n="menu.tagline"></p>
 
         <label class="field">
-          <span>Tu nombre</span>
-          <input id="name-input" maxlength="18" placeholder="El Chino" />
+          <span data-i18n="menu.name">Your name</span>
+          <input id="name-input" maxlength="18" data-i18n-ph="menu.name.ph" />
         </label>
 
         <label class="field">
-          <span>Estadio (room)</span>
-          <input id="room-input" maxlength="24" placeholder="estadio" />
+          <span data-i18n="menu.room">Ground</span>
+          <input id="room-input" maxlength="24" data-i18n-ph="menu.room.ph" />
         </label>
 
         <div class="field row">
-          <label><span>Equipo</span>
+          <label><span data-i18n="menu.team">Team</span>
             <select id="team-select">
-              <option value="auto">Auto</option>
+              <option value="auto" data-i18n="menu.team.auto">Auto</option>
               <option value="0">Cartel de Medallo</option>
               <option value="1">Los Verdes de Cali</option>
             </select>
           </label>
-          <label><span>Duración</span>
+          <label><span data-i18n="menu.length">Length</span>
             <select id="length-select">
               <option value="180">3 min</option>
               <option value="300" selected>5 min</option>
@@ -104,7 +108,7 @@
         </div>
 
         <div class="field row">
-          <label><span>Equipos</span>
+          <label><span data-i18n="menu.size">Squads</span>
             <select id="size-select">
               <option value="3">3 v 3</option>
               <option value="4">4 v 4</option>
@@ -112,24 +116,63 @@
               <option value="6">6 v 6</option>
             </select>
           </label>
-          <label><span>Bots</span>
+          <label><span data-i18n="menu.bots">Bots</span>
             <select id="difficulty-select">
-              <option value="0.35">Tranquilos</option>
-              <option value="0.68" selected>Normales</option>
-              <option value="0.9">Sicarios</option>
+              <option value="0.35" data-i18n="menu.bots.easy">Sunday league</option>
+              <option value="0.68" selected data-i18n="menu.bots.normal">Normal</option>
+              <option value="0.9" data-i18n="menu.bots.hard">Sicarios</option>
             </select>
           </label>
         </div>
 
-        <button id="play-button">JUGAR</button>
-        <p class="note" id="menu-note">
-          Empty shirts are filled by bots, and they hand the shirt back the moment a human turns up.
-        </p>
-        <p class="small credits">Arcade football. Fictional clubs, fictional sponsors, fictional everything.</p>
+        <button id="play-button" class="primary" data-i18n="menu.play">PLAY</button>
+        <div class="button-row">
+          <button id="training-button" class="ghost" data-i18n="menu.training">TRAINING</button>
+          <button id="tutorial-button" class="ghost" data-i18n="menu.tutorial">TUTORIAL</button>
+          <button id="settings-button" class="ghost" data-i18n="menu.settings">SETTINGS</button>
+        </div>
+        <p class="note" id="menu-note" data-i18n="menu.note"></p>
+        <p class="small credits" data-i18n="menu.credits"></p>
+      </div>
+
+      <!-- Drill picker -->
+      <div class="plate hidden" id="menu-training">
+        <h1><span data-i18n="training.title">TRAINING</span></h1>
+        <p class="tagline" data-i18n="training.pick"></p>
+        <div id="drill-list"></div>
+        <button id="training-back" class="ghost wide" data-i18n="training.back">BACK</button>
       </div>
     </div>
 
-    <div id="loading" class="hidden"><span>CONECTANDO…</span></div>
+    <!-- Settings, over everything -->
+    <div id="settings" class="hidden">
+      <div class="plate">
+        <h2 data-i18n="settings.title">SETTINGS</h2>
+
+        <h3 data-i18n="settings.language">Language</h3>
+        <div id="lang-row" class="chip-row"></div>
+
+        <h3 data-i18n="settings.audio">Sound</h3>
+        <label class="slider-row">
+          <span data-i18n="settings.volume">Volume</span>
+          <input id="volume-input" type="range" min="0" max="100" step="1" value="80" />
+          <b id="volume-value">80</b>
+        </label>
+
+        <h3 data-i18n="settings.controls">Controls</h3>
+        <p class="small" data-i18n="settings.rebind"></p>
+        <div id="bind-table"></div>
+        <p class="small" data-i18n="settings.gamepad"></p>
+
+        <div class="button-row">
+          <button id="settings-reset" class="ghost" data-i18n="settings.reset">RESTORE DEFAULTS</button>
+          <button id="settings-leave" class="ghost hidden" data-i18n="settings.leave">LEAVE</button>
+          <button id="settings-close" class="primary" data-i18n="settings.close">CLOSE</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="loading" class="hidden"><span data-i18n="loading.connecting">CONNECTING…</span></div>
 
     <script type="module" src="./src/main.ts"></script>
   </body>

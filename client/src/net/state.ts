@@ -76,6 +76,25 @@ export class MatchState {
     this.world = createWorld({}, 1);
   }
 
+  /**
+   * Forget everything about the last connection. Rooms number their ticks from
+   * zero, so without this a second session's snapshots all look older than the
+   * first one's and get dropped until its tick count catches up.
+   */
+  reset(): void {
+    this.buffer = [];
+    this.pending = [];
+    this.latest = null;
+    this.lastAppliedTick = -1;
+    this.errX = 0;
+    this.errZ = 0;
+    this.ballErr = { x: 0, y: 0, z: 0 };
+    this.myPlayerId = -1;
+    this.nextSeq = 1;
+    this.freshEvents = [];
+    this.goalCount = 0;
+  }
+
   get me(): PlayerState | undefined {
     return this.world.players.find((p) => p.id === this.myPlayerId);
   }

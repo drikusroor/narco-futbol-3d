@@ -2,7 +2,8 @@
 
 Fast, server-authoritative 3D arcade football for the browser and for Discord.
 Five minutes a match, five a side, power-ups, real physics, and bots that fill
-every empty shirt so a game never waits for a full lobby.
+every empty shirt so a game never waits for a full lobby. There is a tutorial,
+four training drills, rebindable controls, and it speaks English and Spanish.
 
 Everything on screen is built from primitives and canvas textures at runtime -
 no models, no images, no audio files.
@@ -27,12 +28,14 @@ Other scripts:
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | Simulation, shooting and protocol tests |
+| `npm test` | Simulation, shooting, controls, training and protocol tests |
 | `npm run typecheck` | Type-checks client, server and shared code |
 | `npx tsx scripts/balance.mjs 5 5` | Simulates 5 bot-only matches of 5 minutes and prints goals, shots, tackles, fouls |
 | `npx tsx scripts/shots.mjs 5 3` | Classifies where every shot ended up: goal, save, block, wide |
 | `SHOT_DIR=/tmp node scripts/smoke.mjs` | Boots the built game in headless Chromium and screenshots it |
 | `SHOT_DIR=/tmp node scripts/multiplayer-smoke.mjs` | Two clients, opposite teams, one leaves mid-match |
+| `SHOT_DIR=/tmp node scripts/training-smoke.mjs` | Settings, a rebind, a drill, the controls panel and the tutorial |
+| `SHOT_DIR=/tmp node scripts/pitch-lines.mjs` | Renders the pitch markings on their own (needs `npm run dev:client`) |
 
 ## Controls
 
@@ -45,9 +48,15 @@ Other scripts:
 | `L` | Lofted pass / cross |
 | `Space` | Tackle — while sprinting it becomes a sliding tackle |
 | `Q` | Switch to the team-mate best placed for the ball |
-| `T` chat, `H` controls, `M` mute | |
+| `T` chat, `H` controls, `M` mute, `Esc` settings | |
 
 Gamepad: left stick to move, A pass, B shoot, Y lob, X tackle, RB sprint, LB switch.
+
+Every one of those is rebindable. `Esc` (or **SETTINGS** on the front end)
+opens the settings screen: language, volume, and a table of every action with
+two key slots each — click a key, press another, and it is saved to
+`localStorage`. The same table is what `H` shows you mid-match, so the help
+panel can never drift from your actual bindings.
 
 You always attack left to right — the camera and the controls both flip for the
 away side, so neither team plays in a mirror.
@@ -58,8 +67,8 @@ away side, so neither team plays in a mirror.
 shared/     the simulation and the wire format - identical on both ends
   sim/      ball flight, players, possession, tackles, rules, power-ups
   protocol  binary snapshots and input batches
-server/     HTTP + WebSocket host, rooms, bot brains
-client/     Three.js renderer, prediction, HUD, procedural audio
+server/     HTTP + WebSocket host, rooms, bot brains, training drills
+client/     Three.js renderer, prediction, HUD, settings, i18n, audio
 ```
 
 **The server is the only authority.** There is no host player. Every client
@@ -83,6 +92,29 @@ with one exception: while it is at your feet it comes from the prediction.
 **Bandwidth.** Snapshots are quantised to centimetres and packed into about
 280 bytes for a 5v5 match, sent 20 times a second - roughly 5.5 KB/s per
 client. Lobby traffic and chat stay on JSON text frames.
+
+## Learning it: tutorial and training
+
+**TUTORIAL** is a ten step lap through the controls — move, sprint, take a
+touch, carry it, pass, cross, shoot, score, win it back, switch player. Each
+step watches the match for the thing it asked for and ticks itself off when it
+actually happens on the pitch, so there is nothing to click through. The cast
+grows with the lesson: you start alone, a team-mate walks on when you need
+somebody to pass to, and a marker joins for the tackle step.
+
+**TRAINING** is four drills on a private pitch:
+
+| | |
+| --- | --- |
+| **Free play** | An empty ground, a ball, and a keeper to beat |
+| **Shooting** | The ball on a marked spot, a new angle every rep, scored out of attempts |
+| **Dribbling** | Five gates to carry the ball through in order, against a defender, on the clock |
+| **Passing** | A team-mate standing in a circle, and a count of how often you find him |
+
+Both run on the ordinary simulation. A drill only sets up the situation — who
+is on the pitch, where the ball starts, when a rep is over — so the physics,
+the bots and the rules you practise against are the ones you play with. Solo
+sessions get their own room and nobody else can join it.
 
 ## Bots and drop-in
 
@@ -141,6 +173,15 @@ The two diagnostic scripts exist so a change can be judged rather than guessed:
 `balance.mjs` reports the shape of a bot-only match, and `shots.mjs` says where
 the shots went. The current defaults produce roughly 4 goals, 15 shots, 10
 saves and 6 fouls per five minute bot match.
+
+## Languages
+
+English and Spanish, switchable at any time from the settings screen without a
+reload. Static markup is tagged `data-i18n`; everything drawn at runtime asks
+`t()` and re-renders on a language change. Server notices travel as a key plus
+parameters so they arrive in the reader's language rather than the sender's.
+Club names, the sponsors and the power-up names stay in Spanish in both — they
+are flavour, not interface.
 
 ## Fiction
 

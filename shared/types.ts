@@ -236,6 +236,44 @@ export type GameEvent =
   | { t: 'wall'; x: number; z: number; speed: number }
   | { t: 'chance'; team: number };
 
+// --- Training ---------------------------------------------------------------
+
+/** Drills you can practise on your own. `tutorial` is the guided one. */
+export type DrillId = 'free' | 'shooting' | 'dribble' | 'passing' | 'tutorial';
+
+export const DRILL_IDS: DrillId[] = ['free', 'shooting', 'dribble', 'passing'];
+
+export function isDrillId(v: unknown): v is DrillId {
+  return v === 'free' || v === 'shooting' || v === 'dribble' || v === 'passing' || v === 'tutorial';
+}
+
+/** Something chalked on the grass for the drill: a gate, a target, a spot. */
+export interface DrillMarker {
+  id: number;
+  kind: 'gate' | 'target' | 'spot';
+  x: number;
+  z: number;
+  /** Radius for targets and spots; half the opening for a gate. */
+  r: number;
+  /** The one you are chasing right now. */
+  active: boolean;
+}
+
+/** A counter for the training panel. `key` is an i18n key, never a sentence. */
+export interface DrillStat {
+  key: string;
+  value: string;
+}
+
+export interface DrillReport {
+  drill: DrillId;
+  promptKey: string;
+  markers: DrillMarker[];
+  stats: DrillStat[];
+  /** Seconds the current rep or lap has been running. */
+  time: number;
+}
+
 // --- Network messages (JSON control channel) --------------------------------
 
 export interface LobbyPlayerInfo {
@@ -252,6 +290,8 @@ export type ClientMessage =
   | { t: 'ready'; ready: boolean }
   | { t: 'chat'; text: string }
   | { t: 'config'; matchSeconds?: number; teamSize?: number; powerups?: boolean; difficulty?: number }
+  /** `stage` is how far through the tutorial you are; drills ignore it. */
+  | { t: 'training'; drill: DrillId; stage?: number }
   | { t: 'pong'; time: number };
 
 export type ServerMessage =
@@ -267,5 +307,10 @@ export type ServerMessage =
     }
   | { t: 'lobby'; players: LobbyPlayerInfo[]; score: [number, number]; phase: MatchPhase }
   | { t: 'chat'; from: string; text: string; team: number }
-  | { t: 'notice'; text: string }
+  /**
+   * `text` is the fallback wording; when `key` is set the client shows its own
+   * translation of it instead, so notices are not stuck in one language.
+   */
+  | { t: 'notice'; text: string; key?: string; params?: Record<string, string | number> }
+  | ({ t: 'drill' } & DrillReport)
   | { t: 'ping'; time: number };
