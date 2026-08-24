@@ -29,9 +29,12 @@ export class Pad {
 
   private index = -1;
   private onChange: () => void;
+  /** Which connected pad this instance claims: 0 is the first, 1 the second. */
+  private readonly slot: number;
 
-  constructor(onChange: () => void = () => {}) {
+  constructor(onChange: () => void = () => {}, slot = 0) {
     this.onChange = onChange;
+    this.slot = slot;
     // Chrome only starts reporting a pad after it has been touched, so the
     // events are the reliable way to notice one arriving.
     window.addEventListener('gamepadconnected', () => this.onChange());
@@ -60,7 +63,7 @@ export class Pad {
     // Stay with the pad we were using; otherwise adopt the first live one.
     let pad = this.index >= 0 ? pads[this.index] : null;
     if (!pad?.connected) {
-      pad = pads.find((p) => p?.connected) ?? null;
+      pad = pads.filter((p) => p?.connected)[this.slot] ?? null;
       const found = pad ? pad.index : -1;
       if (found !== this.index) {
         this.reset();

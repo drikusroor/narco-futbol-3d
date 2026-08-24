@@ -88,12 +88,23 @@
         </label>
 
         <label class="field">
+          <span data-i18n="menu.mode">Mode</span>
+          <select id="mode-select">
+            <option value="online" data-i18n="menu.mode.online">Online</option>
+            <option value="solo" data-i18n="menu.mode.solo">Solo (this device)</option>
+            <option value="coop" data-i18n="menu.mode.coop">Local 2P (this device)</option>
+          </select>
+        </label>
+        <p class="small hidden" id="online-disabled-note" data-i18n="menu.mode.onlineDisabled"></p>
+        <p class="small hidden" id="local-note" data-i18n="menu.mode.localNote"></p>
+
+        <label class="field" id="room-field">
           <span data-i18n="menu.room">Ground</span>
           <input id="room-input" maxlength="24" data-i18n-ph="menu.room.ph" />
         </label>
 
         <div class="field row">
-          <label><span data-i18n="menu.team">Team</span>
+          <label id="team-field"><span data-i18n="menu.team">Team</span>
             <select id="team-select">
               <option value="auto" data-i18n="menu.team.auto">Auto</option>
               <option value="0">Cartel de Medallo</option>

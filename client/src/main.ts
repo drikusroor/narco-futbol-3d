@@ -8,7 +8,9 @@ import {
   Role,
   type DrillId,
   type DrillReport,
+  type PlayerInput,
   type ServerMessage,
+  type Team,
 } from '@shared/types.js';
 import type { Snapshot } from '@shared/protocol.js';
 
@@ -17,8 +19,11 @@ import { initDiscord } from './discord.js';
 import { applyStatic, onLangChange, t, type Key } from './i18n.js';
 import { keyLabel } from './input/bindings.js';
 import { Controls } from './input/controls.js';
+import { SecondPlayerControls } from './input/localP2.js';
+import { LocalMatch } from './local/localMatch.js';
+import { renderStateFromSnapshot, snapshotFromWorld } from './local/localView.js';
 import { GameSocket } from './net/socket.js';
-import { MatchState, type RenderPlayer } from './net/state.js';
+import { applySnapshot, MatchState, type RenderPlayer } from './net/state.js';
 import {
   buildFor,
   makeBall,
@@ -64,6 +69,10 @@ const pickupMeshes = new Map<number, THREE.Group>();
 const nameTags = new Map<number, THREE.Sprite>();
 
 let socket: GameSocket | null = null;
+/** Set instead of `socket` for offline play: no network, sim runs in this tab. */
+let localMatch: LocalMatch | null = null;
+let p2Controls: SecondPlayerControls | null = null;
+const STATIC_ONLY = import.meta.env.VITE_STATIC_ONLY === 'true';
 let running = false;
 let accumulator = 0;
 let lastFrame = performance.now();
@@ -149,6 +158,33 @@ const teamSelect = document.getElementById('team-select') as HTMLSelectElement;
 const lengthSelect = document.getElementById('length-select') as HTMLSelectElement;
 const sizeSelect = document.getElementById('size-select') as HTMLSelectElement;
 const difficultySelect = document.getElementById('difficulty-select') as HTMLSelectElement;
+const modeSelect = document.getElementById('mode-select') as HTMLSelectElement;
+const roomField = document.getElementById('room-field')!;
+const teamField = document.getElementById('team-field')!;
+const onlineDisabledNote = document.getElementById('online-disabled-note')!;
+const localNote = document.getElementById('local-note')!;
+const trainingButton = document.getElementById('training-button') as HTMLButtonElement;
+const tutorialButton = document.getElementById('tutorial-button') as HTMLButtonElement;
+
+/** GitHub Pages ships the client alone - nothing on the other end of `/ws`. */
+if (STATIC_ONLY) {
+  const onlineOption = modeSelect.querySelector('option[value="online"]') as HTMLOptionElement;
+  onlineOption.disabled = true;
+  modeSelect.value = 'solo';
+  onlineDisabledNote.classList.remove('hidden');
+  trainingButton.disabled = true;
+  tutorialButton.disabled = true;
+  trainingButton.title = tutorialButton.title = t('menu.mode.onlineDisabled');
+}
+
+function refreshModeFields(): void {
+  const online = modeSelect.value === 'online';
+  roomField.classList.toggle('hidden', !online);
+  teamField.classList.toggle('hidden', !online);
+  localNote.classList.toggle('hidden', online);
+}
+modeSelect.addEventListener('change', refreshModeFields);
+refreshModeFields();
 
 nameInput.value = localStorage.getItem('nf.name') ?? '';
 roomInput.value = new URLSearchParams(location.search).get('room') ?? '';
@@ -174,7 +210,10 @@ applyStatic();
 refreshChatHint();
 onLangChange(() => refreshChatHint());
 
-document.getElementById('play-button')!.addEventListener('click', () => join());
+document.getElementById('play-button')!.addEventListener('click', () => {
+  if (modeSelect.value === 'online') join();
+  else startLocal(modeSelect.value === 'coop' ? 2 : 1);
+});
 document.getElementById('settings-button')!.addEventListener('click', () => settings.show());
 document.getElementById('tutorial-button')!.addEventListener('click', () =>
   join({ drill: 'tutorial' }),
@@ -251,14 +290,60 @@ function join(opts: { drill?: DrillId } = {}): void {
   });
 }
 
+/** Same pitch, no server: the simulation runs in this tab instead of on one. */
+function startLocal(humanCount: 1 | 2): void {
+  myName = (nameInput.value.trim() || 'Anon').slice(0, 18);
+  localStorage.setItem('nf.name', myName);
+  pendingDrill = null;
+
+  sfx.start();
+  menu.classList.add('hidden');
+  state.reset();
+  lastGoalCount = -1;
+  lobbyNames.clear();
+
+  const team: Team = 0;
+  const names = humanCount === 2 ? [myName, t('menu.mode.player2')] : [myName];
+  localMatch = new LocalMatch({
+    teamSize: Number(sizeSelect.value),
+    matchSeconds: Number(lengthSelect.value),
+    difficulty: Number(difficultySelect.value),
+    powerups: true,
+    names,
+    team,
+  });
+  p2Controls = humanCount === 2 ? new SecondPlayerControls() : null;
+
+  const p1 = localMatch.humanIds[0];
+  state.myPlayerId = p1;
+  controls.flip = localMatch.playerTeam(p1) === 1 ? -1 : 1;
+  camera.flip = controls.flip;
+  if (p2Controls) p2Controls.flip = controls.flip;
+
+  for (let i = 0; i < localMatch.humanIds.length; i++) lobbyNames.set(localMatch.humanIds[i], names[i]);
+  hud.setYou(myName, localMatch.playerTeam(p1), localMatch.playerRole(p1));
+  hud.setPing(0);
+  // refreshNameTags reads state.world, so it needs one sync before it runs.
+  applySnapshot(state.world, snapshotFromWorld(localMatch.world, [], Date.now()));
+  refreshNameTags();
+
+  hud.show();
+  settings.setInGame(true);
+  running = true;
+}
+
 /** Walk off the pitch on purpose: no "disconnected" scare, straight to the menu. */
 function leaveMatch(): void {
-  if (!socket) return;
-  leaving = true;
-  socket.close();
+  if (!socket && !localMatch) return;
+  if (socket) {
+    leaving = true;
+    socket.close();
+    // close() detaches the socket, so nothing else will report the close.
+    socket = null;
+  }
+  localMatch = null;
+  p2Controls = null;
   running = false;
-  // close() detaches the socket, so nothing else will report the close.
-  socket = null;
   leaveTraining();
   settings.setInGame(false);
   menu.classList.remove('hidden');
@@ -509,6 +594,8 @@ function frame(now: number): void {
   controls.poll();
   padNav.update(dt);
 
+  let view: ReturnType<typeof state.sample> = null;
+
   if (running && socket) {
     // Fixed-step prediction so the local sim matches the server exactly.
     accumulator += dt;
@@ -523,9 +610,22 @@ function frame(now: number): void {
     }
     socket.flush();
     state.decayError(dt);
+    view = state.sample(now);
+  } else if (running && localMatch) {
+    if (p2Controls) p2Controls.poll();
+    const inputs = new Map<number, PlayerInput>();
+    const [p1, p2] = localMatch.humanIds;
+    if (p1 !== undefined) inputs.set(p1, controls.sample());
+    if (p2 !== undefined && p2Controls) inputs.set(p2, p2Controls.sample());
+    const events = localMatch.pump(dt, inputs);
+    const snap = snapshotFromWorld(localMatch.world, events, Date.now());
+    // Keeps `state.world` (name tags, role look-ups) truthful without the
+    // network path's prediction/interpolation - there is no latency to hide.
+    applySnapshot(state.world, snap);
+    handleEvents(snap);
+    view = renderStateFromSnapshot(snap);
   }
 
-  const view = state.sample(now);
   if (view) drawWorld(view, dt, now);
 
   if (drillReport) {
@@ -660,7 +760,19 @@ requestAnimationFrame(frame);
 // A handle on the innards for headless debugging. Dev builds only - Vite
 // folds this away entirely when the game is bundled for production.
 if (import.meta.env.DEV) {
-  (window as unknown as { __nf: unknown }).__nf = { state, controls, tutorial, hud, settings };
+  (window as unknown as { __nf: unknown }).__nf = {
+    state,
+    controls,
+    tutorial,
+    hud,
+    settings,
+    get localMatch() {
+      return localMatch;
+    },
+    get p2Controls() {
+      return p2Controls;
+    },
+  };
 }
 
 // Keep the audio context alive across tab switches.
