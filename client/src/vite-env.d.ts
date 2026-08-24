@@ -2,6 +2,8 @@
 
 interface ImportMetaEnv {
   readonly VITE_DISCORD_CLIENT_ID?: string;
+  /** Set by the GitHub Pages build: there is no game server to connect to. */
+  readonly VITE_STATIC_ONLY?: string;
 }
 
 interface ImportMeta {

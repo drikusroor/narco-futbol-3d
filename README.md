@@ -194,6 +194,27 @@ the WebSocket rather than load-balancing mid-game.
 
 For Discord, see [DISCORD.md](DISCORD.md).
 
+### GitHub Pages (client only, no server)
+
+`.github/workflows/deploy-pages.yml` builds just the client
+(`VITE_STATIC_ONLY=true npm run build:client`) and publishes it to GitHub
+Pages on every push to `main`, or on demand from the Actions tab. There is no
+WebSocket server on Pages, so that build disables online play, training and
+the tutorial (shown in the menu, greyed out) and defaults the front end's
+**Mode** selector to solo. Two offline modes still work fully, running the
+same simulation the server runs, entirely in the tab:
+
+- **Solo** - you against bots.
+- **Local 2P** - two people on one device, same team, against bots. Player
+  one keeps the usual keyboard/pad; player two gets a fixed key cluster
+  (arrows to move, Enter/'/;/right-Shift//] for pass/shoot/lob/sprint/tackle)
+  and, if a second gamepad is plugged in, that instead.
+
+Enable Pages once under the repo's **Settings → Pages → Source: GitHub
+Actions**. A normal `npm start` deployment (Fly or otherwise) keeps online
+play, training and the tutorial available as before - the flag only affects
+the static build.
+
 ## Tuning
 
 Every number that matters is in `shared/constants.ts` — pitch size, ball drag
